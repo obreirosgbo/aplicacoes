@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle Financeiro</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- SIDEBAR LATERAL -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Controle Financeiro</h2>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-link active" data-page="dashboard">📊 Dashboard</a>
+                <a href="#lancamentos" class="nav-link" data-page="lancamentos">📝 Lançamentos</a>
+                <a href="#historico" class="nav-link" data-page="historico">🕒 Histórico</a>
+                <a href="#controle" class="nav-link" data-page="controle">📈 Relatórios</a>
+                <a href="#prestacoes" class="nav-link" data-page="prestacoes">📋 Prestação de Contas</a>
+                <a href="#irmãos" class="nav-link" data-page="irmãos">👥 Irmãos</a>
+                <a href="#configuracoes" class="nav-link" data-page="configuracoes">⚙️ Configurações</a>
+                <a href="#controle-acessos" class="nav-link" data-page="controle-acessos">🔑 Controle de Acessos <span id="badge-pendentes" class="badge-pendentes" style="display:none;"></span></a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <span id="user-name" class="user-name">Carregando...</span>
+                </div>
+                <button id="logout-btn" class="btn-logout">Sair 🚪</button>
+            </div>
+        </aside>
+
+        <!-- CONTEÚDO PRINCIPAL -->
+        <main class="main-content">
+            <header class="top-header">
+                <h2 id="page-title">Dashboard</h2>
+            </header>
+
+            <div class="page-content">
+                <!-- 
+                     DASHBOARD PREMIUM COM GRÁFICOS E FILTROS
+                      -->
+                <section id="dashboard" class="page active">
+                    <!-- FILTROS DE DATA -->
+                    <div class="filter-container" style="border-left-color: var(--color-primary); margin-bottom: 1.5rem;">
+                        <div class="filter-group">
+                            <label>Data Inicial</label>
+                            <input type="date" id="dash-filtro-data-inicio">
+                        </div>
+                        <div class="filter-group">
+                            <label>Data Final</label>
+                            <input type="date" id="dash-filtro-data-fim">
+                        </div>
+                        <div class="filter-actions">
+                            <button class="btn-primary" onclick="aplicarFiltrosDashboard()">🔍 Filtrar</button>
+                            <button class="btn-secondary" onclick="limparFiltrosDashboard()">Limpar</button>
+                        </div>
+                    </div>
+
+                    <!-- CARDS KPI -->
+                    <div class="dashboard-premium-grid">
+                        <div class="card-premium bg-gradient-primary">
+                            <div class="card-icon">💰</div>
+                            <div class="card-info">
+                                <h3>Saldo Geral Líquido</h3>
+                                <p class="card-value" id="dash-saldo-geral">R$ 0,00</p>
+                            </div>
+                        </div>
+                        <div class="card-premium bg-white border-success">
+                            <div class="card-icon text-success">📈</div>
+                            <div class="card-info">
+                                <h3 class="text-gray">Total Receitas</h3>
+                                <p class="card-value text-dark" id="dash-total-receitas">R$ 0,00</p>
+                            </div>
+                        </div>
+                        <div class="card-premium bg-white border-danger">
+                            <div class="card-icon text-danger">📉</div>
+                            <div class="card-info">
+                                <h3 class="text-gray">Total Despesas</h3>
+                                <p class="card-value text-dark" id="dash-total-despesas">R$ 0,00</p>
+                            </div>
+                        </div>
+                        <div class="card-premium bg-white border-warning">
+                            <div class="card-icon text-warning">⚠️</div>
+                            <div class="card-info">
+                                <h3 class="text-gray">Maior Despesa Única</h3>
+                                <p class="card-value text-dark" id="dash-maior-despesa">R$ 0,00</p>
+                            </div>
+                        </div>
+                        <div class="card-premium bg-white border-info">
+                            <div class="card-icon text-info">📅</div>
+                            <div class="card-info">
+                                <h3 class="text-gray">Média de Gasto Diário</h3>
+                                <p class="card-value text-dark" id="dash-media-diaria">R$ 0,00</p>
+                            </div>
+                        </div>
+                        <div class="card-premium bg-white border-purple">
+                            <div class="card-icon text-purple">📊</div>
+                            <div class="card-info">
+                                <h3 class="text-gray">Qtd. Lançamentos</h3>
+                                <p class="card-value text-dark" id="dash-qtd-lancamentos">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GRÁFICOS ANALÍTICOS - LINHA 1 (2 GRÁFICOS) -->
+                    <div class="charts-container mt-2" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem;">
+                        <!-- Gráfico de Fluxo Geral -->
+                        <div class="chart-box">
+                            <h3>💵 Visão Geral de Fluxo</h3>
+                            <canvas id="chart-receita-despesa" style="max-height: 350px;"></canvas>
+                        </div>
+
+                        <!-- Gráfico de Evolução Temporal -->
+                        <div class="chart-box">
+                            <h3>📈 Evolução Temporal</h3>
+                            <canvas id="chart-evolucao-dashboard" style="max-height: 350px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- GRÁFICOS ANALÍTICOS - LINHA 2 (2 GRÁFICOS) -->
+                    <div class="charts-container mt-2" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 1.5rem;">
+                        <!-- Gráfico de Composição por Categoria -->
+                        <div class="chart-box">
+                            <h3>🎯 Distribuição por Categoria</h3>
+                            <canvas id="chart-composicao-dashboard" style="max-height: 350px;"></canvas>
+                        </div>
+
+                        <!-- Gráfico de Receitas vs Despesas por Categoria -->
+                        <div class="chart-box">
+                            <h3>⚖️ Receitas vs Despesas por Categoria</h3>
+                            <canvas id="chart-tipificacao-dashboard" style="max-height: 350px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- RESUMO EXECUTIVO -->
+                    <div class="executive-summary mt-2">
+                        <h3>📋 Resumo Executivo</h3>
+                        <div class="summary-grid">
+                            <div class="summary-item">
+                                <span class="summary-label">Período Analisado</span>
+                                <span class="summary-value" id="dash-periodo">Mês Atual</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Taxa de Cobertura</span>
+                                <span class="summary-value" id="dash-taxa-cobertura">0%</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Categoria com Maior Receita</span>
+                                <span class="summary-value" id="dash-maior-receita-cat">-</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-label">Categoria com Maior Despesa</span>
+                                <span class="summary-value" id="dash-maior-despesa-cat">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 
+                     LANÇAMENTOS
+                      -->
+                <section id="lancamentos" class="page">
+                    <div class="action-bar">
+                        <button class="btn-primary" onclick="abrirModalLancamento()">+ Novo Lançamento</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Categoria</th>
+                                    <th>Histórico</th>
+                                    <th>Descrição</th>
+                                    <th>Valor</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lancamentos-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 
+                     HISTÓRICO DE AUDITORIA
+                      -->
+                <section id="historico" class="page">
+                    <div class="table-container">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th>Data/Hora</th>
+                                    <th>Ação</th>
+                                    <th>Detalhes</th>
+                                    <th>Usuário</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historico-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 
+                     RELATÓRIOS DINÂMICOS
+                      -->
+                <section id="controle" class="page">
+                    <div class="page-header">
+                        <h2>Análise e Relatórios Dinâmicos</h2>
+                        <div class="header-actions">
+                            <button class="btn-secondary" onclick="exportarRelatorioCSV()">📥 Exportar Excel (CSV)</button>
+                            <button class="btn-primary" onclick="imprimirRelatorio()">🖨️ Imprimir / PDF</button>
+                        </div>
+                    </div>
+
+                    <!-- FILTROS AVANÇADOS -->
+                    <div class="filter-container">
+                        <div class="filter-group">
+                            <label>Data Inicial</label>
+                            <input type="date" id="filtro-data-inicio">
+                        </div>
+                        <div class="filter-group">
+                            <label>Data Final</label>
+                            <input type="date" id="filtro-data-fim">
+                        </div>
+                        <div class="filter-group">
+                            <label>Tipo</label>
+                            <select id="filtro-tipo">
+                                <option value="">Todos</option>
+                                <option value="RECEITA">Receitas</option>
+                                <option value="DESPESA">Despesas</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Categoria</label>
+                            <select id="filtro-tipificacao">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+                        <div class="filter-actions">
+                            <button class="btn-primary" onclick="aplicarFiltrosControle()">🔍 Filtrar</button>
+                            <button class="btn-secondary" onclick="limparFiltrosControle()">Limpar</button>
+                        </div>
+                    </div>
+
+                    <!-- RESUMO DO RELATÓRIO -->
+                    <div class="report-summary">
+                        <div class="summary-card">
+                            <h4>Total Filtrado (Receitas)</h4>
+                            <p id="relatorio-receitas" class="text-success">R$ 0,00</p>
+                        </div>
+                        <div class="summary-card">
+                            <h4>Total Filtrado (Despesas)</h4>
+                            <p id="relatorio-despesas" class="text-danger">R$ 0,00</p>
+                        </div>
+                        <div class="summary-card">
+                            <h4>Resultado do Período</h4>
+                            <p id="relatorio-resultado">R$ 0,00</p>
+                        </div>
+                    </div>
+
+                    <!-- GRÁFICOS DO RELATÓRIO -->
+                    <div class="charts-container mt-2" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+                        <div class="chart-box">
+                            <h3>Evolução Diária</h3>
+                            <canvas id="chart-evolucao" style="max-height: 300px;"></canvas>
+                        </div>
+                        <div class="chart-box">
+                            <h3>Composição por Categoria</h3>
+                            <canvas id="chart-composicao" style="max-height: 300px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- TABELA DE DADOS DO RELATÓRIO -->
+                    <div class="table-container mt-2">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Categoria</th>
+                                    <th>Histórico</th>
+                                    <th>Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="controle-tabela-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 
+                     PRESTAÇÃO DE CONTAS (EVENTOS)
+                      -->
+                <section id="prestacoes" class="page">
+                    <div class="page-header">
+                        <h2>Eventos e Prestações de Contas</h2>
+                        <div class="header-actions">
+                            <button class="btn-primary" onclick="abrirModalGerarPrestacao()">📊 Gerar Prestação de Contas</button>
+                            <button class="btn-primary" onclick="abrirModalEvento()">+ Criar Novo Evento</button>
+                        </div>
+                    </div>
+                    
+                    <div id="eventos-grid" class="eventos-grid"></div>
+                </section>
+
+                <!--
+                     CADASTRO DE IRMÃOS (PARA NOTIFICAÇÕES)
+                      -->
+                <section id="irmãos" class="page">
+                    <div class="page-header">
+                        <h2>Gerenciar Irmãos - Notificações</h2>
+                        <div style="display:flex; gap: 0.75rem; flex-wrap: wrap;">
+                            <button class="btn-secondary" onclick="document.getElementById('input-excel-irmaos').click()">📥 Importar Excel</button>
+                            <input type="file" id="input-excel-irmaos" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importarIrmaosExcel(this)">
+                            <button class="btn-primary" onclick="abrirModalIrmao()">+ Adicionar Irmão</button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>WhatsApp</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="irmaos-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!--
+                     CONTROLE DE ACESSOS (Admin)
+                      -->
+                <section id="controle-acessos" class="page">
+                    <div class="page-header">
+                        <h2>Controle de Acessos</h2>
+                    </div>
+
+                    <!-- Filtros de status -->
+                    <div class="filter-container" style="border-left-color: var(--color-primary); margin-bottom: 1.5rem;">
+                        <div class="filter-group">
+                            <label>Filtrar por Status</label>
+                            <select id="filtro-status-acesso" onchange="filtrarControleAcessos()">
+                                <option value="">Todos</option>
+                                <option value="pending">Pendentes</option>
+                                <option value="approved">Aprovados</option>
+                                <option value="rejected">Rejeitados</option>
+                            </select>
+                        </div>
+                        <div class="filter-actions">
+                            <button class="btn-primary" onclick="carregarControleAcessos()">🔄 Atualizar</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Solicitado em</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="controle-acessos-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!--
+                     CONFIGURAÇÕES (Categorias)
+                      -->
+                <section id="configuracoes" class="page">
+                    <div class="config-section">
+                        <h3>Gerenciar Categorias</h3>
+                        <p class="text-muted mb-2">Adicione, edite ou remova as categorias usadas nos lançamentos.</p>
+                        
+                        <form id="form-tipificacao" class="form-inline mt-2">
+                            <input type="hidden" id="tipificacao-id">
+                            <input type="text" id="nova-tipificacao" placeholder="Nome da Categoria..." required>
+                            <button type="submit" class="btn-primary" id="btn-salvar-tipificacao">Adicionar</button>
+                            <button type="button" class="btn-secondary" id="btn-cancelar-tipificacao" style="display:none;" onclick="cancelarEdicaoTipificacao()">Cancelar</button>
+                        </form>
+
+                        <div class="table-container mt-2">
+                            <table class="table-data">
+                                <thead>
+                                    <tr>
+                                        <th>Nome da Categoria</th>
+                                        <th width="150">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tipificacoes-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- 
+         MODAL DE LANÇAMENTO
+          -->
+    <div id="modal-lancamento" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-lancamento-title">Novo Lançamento</h3>
+                <span class="close-modal" onclick="fecharModalLancamento()">&times;</span>
+            </div>
+            <form id="form-lancamento">
+                <input type="hidden" id="lancamento-id">
+                
+                <div class="form-group">
+                    <label>Tipo</label>
+                    <select id="lancamento-tipo" required>
+                        <option value="RECEITA">Receita</option>
+                        <option value="DESPESA">Despesa</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select id="lancamento-tipificacao" required></select>
+                </div>
+
+                <div class="form-group">
+                    <label>Data</label>
+                    <input type="date" id="lancamento-data" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Histórico (Título Curto)</label>
+                    <input type="text" id="lancamento-historico" placeholder="Ex: Compra de Materiais" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Descrição Detalhada</label>
+                    <textarea id="lancamento-descricao" rows="3" placeholder="Detalhes adicionais do lançamento..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Valor (R$)</label>
+                    <input type="number" step="0.01" min="0.01" id="lancamento-valor" required>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="fecharModalLancamento()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Salvar Lançamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 
+         MODAL DE EVENTO (PRESTAÇÃO DE CONTAS)
+          -->
+    <div id="modal-evento" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="modal-evento-title">Criar Evento para Prestação</h3>
+                <span class="close-modal" onclick="fecharModalEvento()">&times;</span>
+            </div>
+            <form id="form-evento">
+                <input type="hidden" id="evento-id">
+                <div class="form-group">
+                    <label>Nome do Evento</label>
+                    <input type="text" id="evento-nome" placeholder="Ex: Festa de Fim de Ano 2025" required>
+                </div>
+                <div class="form-group">
+                    <label>Categoria (Categoria Associada)</label>
+                    <select id="evento-tipificacao" required onchange="carregarLancamentosParaVinculo()"></select>
+                    <small class="text-muted">Apenas lançamentos desta categoria poderão ser vinculados.</small>
+                </div>
+                <div class="form-group">
+                    <label>Informações / Justificativa</label>
+                    <textarea id="evento-informacoes" rows="3" placeholder="Descreva o propósito deste evento..." required></textarea>
+                </div>
+                
+                <div class="form-group mt-2">
+                    <label>Vincular Lançamentos a este Evento</label>
+                    <div class="table-container" style="max-height: 250px; overflow-y: auto;">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th width="50">Vincular</th>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Histórico</th>
+                                    <th>Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evento-lancamentos-body">
+                                <tr><td colspan="5" class="text-center">Selecione uma categoria acima.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="fecharModalEvento()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Salvar Evento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 
+         MODAL DE VISUALIZAÇÃO COMPLETA DO EVENTO
+          -->
+    <div id="modal-visualizar-evento" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px 12px 0 0; margin: -2rem -2rem 0 -2rem; padding: 2rem;">
+                <h3 id="modal-vis-titulo" style="color: white; margin: 0;">Detalhes da Prestação de Contas</h3>
+                <span class="close-modal" onclick="fecharModalVisualizarEvento()" style="color: white; font-size: 2rem;">&times;</span>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Informações do Evento -->
+                <div class="evento-info-completa">
+                    <h4>📋 Informações do Evento</h4>
+                    <p id="modal-vis-informacoes"></p>
+                    <div class="evento-meta">
+                        <span><strong>📁 Categoria:</strong> <span id="modal-vis-categoria"></span></span>
+                        <span><strong>📅 Data de Criação:</strong> <span id="modal-vis-data-criacao"></span></span>
+                    </div>
+                </div>
+
+                <!-- Resumo Financeiro -->
+                <div class="evento-resumo-financeiro">
+                    <h4>💰 Resumo Financeiro</h4>
+                    <div class="resumo-grid">
+                        <div class="resumo-item" style="border-top: 4px solid #10b981;">
+                            <span class="resumo-label">Total Arrecadado</span>
+                            <span class="resumo-valor text-success" id="modal-vis-receitas">R$ 0,00</span>
+                        </div>
+                        <div class="resumo-item" style="border-top: 4px solid #ef4444;">
+                            <span class="resumo-label">Total Gasto</span>
+                            <span class="resumo-valor text-danger" id="modal-vis-despesas">R$ 0,00</span>
+                        </div>
+                        <div class="resumo-item" style="border-top: 4px solid #3b82f6;">
+                            <span class="resumo-label">Balanço Final</span>
+                            <span class="resumo-valor" id="modal-vis-saldo">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicador de Status -->
+                <div id="modal-vis-status" style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: none;">
+                    <strong id="modal-vis-status-texto">✅ Evento com saldo positivo</strong>
+                </div>
+
+                <!-- Tabela de Lançamentos -->
+                <div class="evento-lancamentos-tabela">
+                    <h4>📊 Lançamentos Vinculados (<span id="modal-vis-qtd-lancamentos">0</span>)</h4>
+                    <div class="table-container">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Categoria</th>
+                                    <th>Histórico</th>
+                                    <th>Descrição</th>
+                                    <th>Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-vis-lancamentos-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="fecharModalVisualizarEvento()">Fechar</button>
+                <button type="button" class="btn-primary" onclick="imprimirEventoDetalhes()">🖨️ Imprimir</button>
+                <button type="button" class="btn-primary" onclick="exportarEventoCSV()">📥 Exportar Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 
+         MODAL DE GERAÇÃO DE PRESTAÇÃO DE CONTAS
+          -->
+    <div id="modal-gerar-prestacao" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>Gerar Prestação de Contas</h3>
+                <span class="close-modal" onclick="fecharModalGerarPrestacao()">&times;</span>
+            </div>
+            <form id="form-gerar-prestacao">
+                <div class="form-group">
+                    <label>Data Inicial</label>
+                    <input type="date" id="prestacao-data-inicio" required>
+                </div>
+                <div class="form-group">
+                    <label>Data Final</label>
+                    <input type="date" id="prestacao-data-fim" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="fecharModalGerarPrestacao()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Gerar Relatório</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 
+         MODAL DE RELATÓRIO DE PRESTAÇÃO DE CONTAS
+          -->
+    <div id="modal-relatorio-prestacao" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="relatorio-prestacao-titulo">Relatório de Prestação de Contas</h3>
+                <span class="close-modal" onclick="fecharModalRelatorioPrestacao()">&times;</span>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Período -->
+                <div class="evento-info-completa">
+                    <h4>📅 Período da Prestação</h4>
+                    <p id="relatorio-prestacao-periodo"></p>
+                </div>
+
+                <!-- Resumo Geral -->
+                <div class="evento-resumo-financeiro">
+                    <h4>💰 Resumo Financeiro Geral</h4>
+                    <div class="resumo-grid">
+                        <div class="resumo-item" style="border-top: 4px solid #10b981;">
+                            <span class="resumo-label">Total Arrecadado</span>
+                            <span class="resumo-valor text-success" id="relatorio-prestacao-receitas">R$ 0,00</span>
+                        </div>
+                        <div class="resumo-item" style="border-top: 4px solid #ef4444;">
+                            <span class="resumo-label">Total Gasto</span>
+                            <span class="resumo-valor text-danger" id="relatorio-prestacao-despesas">R$ 0,00</span>
+                        </div>
+                        <div class="resumo-item" style="border-top: 4px solid #3b82f6;">
+                            <span class="resumo-label">Resultado</span>
+                            <span class="resumo-valor" id="relatorio-prestacao-resultado">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gráficos -->
+                <div class="charts-container mt-2" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+                    <div class="chart-box">
+                        <h3>Evolução Diária</h3>
+                        <canvas id="chart-prestacao-evolucao" style="max-height: 300px;"></canvas>
+                    </div>
+                    <div class="chart-box">
+                        <h3>Distribuição por Categoria</h3>
+                        <canvas id="chart-prestacao-composicao" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
+
+                <!-- Eventos Vinculados -->
+                <div class="evento-lancamentos-tabela mt-2">
+                    <h4>📋 Lançamentos Vinculados a Eventos</h4>
+                    <div id="relatorio-prestacao-eventos"></div>
+                </div>
+
+                <!-- Lançamentos Não Vinculados a Eventos -->
+                <div class="evento-lancamentos-tabela mt-2">
+                    <h4>📊 Lançamentos Não Vinculados a Eventos</h4>
+                    <div class="table-container">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Categoria</th>
+                                    <th>Histórico</th>
+                                    <th>Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="relatorio-prestacao-lancamentos-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="fecharModalRelatorioPrestacao()">Fechar</button>
+                <button type="button" class="btn-primary" onclick="imprimirRelatorioPrestacao()">🖨️ Imprimir</button>
+                <button type="button" class="btn-primary" onclick="exportarRelatorioPrestacaoCSV()">📥 Exportar Excel</button>
+                <button type="button" class="btn-primary" onclick="abrirModalEnviarPrestacao()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📧 Enviar para Irmãos</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 
+         MODAL DE ENVIO DE PRESTAÇÃO DE CONTAS
+          -->
+     <!-- 
+         MODAL DE ENVIO DE PRESTAÇÃO DE CONTAS - PREMIUM
+          -->
+    <div id="modal-enviar-prestacao" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px 12px 0 0; margin: -2rem -2rem 0 -2rem; padding: 2rem;">
+                <h3 style="color: white; margin: 0;">📧 Enviar Prestação de Contas</h3>
+                <span class="close-modal" onclick="fecharModalEnviarPrestacao()" style="color: white; font-size: 2rem;">&times;</span>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Seção de Seleção Rápida -->
+                <div style="background: linear-gradient(135deg, #f0f4ff 0%, #f8f9ff 100%); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; border-left: 4px solid #667eea;">
+                    <h4 style="margin-top: 0; color: var(--color-dark);">🎯 Seleção Rápida</h4>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button type="button" class="btn-primary" onclick="selecionarTodosIrmaos()" style="background: #10b981; flex: 1; min-width: 150px;">✓ Selecionar Todos</button>
+                        <button type="button" class="btn-secondary" onclick="desmarcarTodosIrmaos()" style="flex: 1; min-width: 150px;">✗ Desmarcar Todos</button>
+                    </div>
+                </div>
+
+                <!-- Tabela de Irmãos -->
+                <h4 style="color: var(--color-dark); margin-bottom: 1rem;">👥 Irmãos para Receber</h4>
+                <div class="table-container" style="max-height: 400px; overflow-y: auto; margin-bottom: 1.5rem;">
+                    <table class="table-data">
+                        <thead>
+                            <tr>
+                                <th width="50">Enviar</th>
+                                <th>Nome</th>
+                                <th>Email</th>
+                                <th>WhatsApp</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="envio-irmaos-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Canais de Envio -->
+                <div style="background: linear-gradient(135deg, #f0fdf4 0%, #f8fef6 100%); padding: 1.5rem; border-radius: 12px; border-left: 4px solid #10b981;">
+                    <h4 style="margin-top: 0; color: var(--color-dark);">📬 Canais de Envio</h4>
+                    <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 0.8rem; cursor: pointer; font-weight: 600; color: var(--color-dark);">
+                            <input type="checkbox" id="envio-email" checked style="width: 20px; height: 20px; cursor: pointer;">
+                            <span>📧 Email</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.8rem; cursor: pointer; font-weight: 600; color: var(--color-dark);">
+                            <input type="checkbox" id="envio-whatsapp" checked style="width: 20px; height: 20px; cursor: pointer;">
+                            <span>💬 WhatsApp</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="fecharModalEnviarPrestacao()">Cancelar</button>
+                <button type="button" class="btn-primary" onclick="enviarPrestacaoSelecionados()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 0.8rem 2rem; font-weight: 700;">✓ Enviar Agora</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 
+         MODAL DE CADASTRO DE IRMÃO
+          -->
+        <!-- 
+         MODAL DE CADASTRO DE IRMÃO - PREMIUM
+          -->
+    <div id="modal-irmao" class="modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px 12px 0 0; margin: -2rem -2rem 0 -2rem; padding: 2rem;">
+                <h3 id="modal-irmao-title" style="color: white; margin: 0;">👥 Adicionar Irmão</h3>
+                <span class="close-modal" onclick="fecharModalIrmao()" style="color: white; font-size: 2rem;">&times;</span>
+            </div>
+            
+            <form id="form-irmao">
+                <input type="hidden" id="irmao-id">
+                
+                <div class="form-group">
+                    <label>Nome Completo</label>
+                    <input type="text" id="irmao-nome" placeholder="Ex: João Silva" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="irmao-email" placeholder="Ex: joao@example.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label>WhatsApp (com código do país)</label>
+                    <input type="tel" id="irmao-whatsapp" placeholder="Ex: +55 11 99999-9999" required>
+                </div>
+
+                <!-- Toggle Ativo/Inativo -->
+                <div class="form-group" style="margin-bottom: 2rem;">
+                    <label style="display: flex; align-items: center; gap: 1rem; cursor: pointer;">
+                        <div style="position: relative; width: 60px; height: 32px;">
+                            <input type="checkbox" id="irmao-ativo" checked style="display: none;">
+                            <div id="toggle-irmao" style="
+                                position: absolute;
+                                width: 100%;
+                                height: 100%;
+                                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                border-radius: 16px;
+                                cursor: pointer;
+                                transition: all 0.3s ease;
+                                box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+                            ">
+                                <div style="
+                                    position: absolute;
+                                    width: 28px;
+                                    height: 28px;
+                                    background: white;
+                                    border-radius: 50%;
+                                    top: 2px;
+                                    left: 2px;
+                                    transition: all 0.3s ease;
+                                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                                " id="toggle-circle-irmao"></div>
+                            </div>
+                        </div>
+                        <span style="font-weight: 600; color: var(--color-dark);">
+                            <span id="toggle-text-irmao">Ativo</span> (receber notificações)
+                        </span>
+                    </label>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="fecharModalIrmao()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Salvar Irmão</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="supabase.js"></script>
+    <script src="usuario.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

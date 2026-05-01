@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ERP Financeiro - Sistema de Controle Financeiro 4T 2025">
+    <meta name="theme-color" content="#1a5f4a">
+    <title>Login - ERP Financeiro</title>
+    <link rel="stylesheet" href="login-styles.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' fill='%231a5f4a'>💰</text></svg>">
+</head>
+<body>
+    <!-- BACKGROUND ANIMADO -->
+    <div class="background-animation">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+
+    <!-- CONTAINER PRINCIPAL -->
+    <div class="login-container">
+        <!-- PAINEL ESQUERDO (INFORMAÇÕES) -->
+        <div class="login-panel login-info">
+            <div class="info-content">
+                <h1 class="info-title">
+
+                Controle Financeiro
+                </h1>
+              
+                
+                <div class="info-features">
+                    <div class="feature">
+                        <span class="feature-icon">📊</span>
+                        <h3>Dashboard Inteligente</h3>
+                        <p>Visualize seus dados financeiros em tempo real</p>
+                    </div>
+                    
+                    <div class="feature">
+                        <span class="feature-icon">📈</span>
+                        <h3>Análise Completa</h3>
+                        <p>Gráficos e relatórios detalhados de receitas e despesas</p>
+                    </div>
+                    
+                    <div class="feature">
+                        <span class="feature-icon">🔒</span>
+                        <h3>Segurança Premium</h3>
+                        <p>Seus dados protegidos com criptografia de ponta</p>
+                    </div>
+                    
+                    <div class="feature">
+                        <span class="feature-icon">⚡</span>
+                        <h3>Performance</h3>
+                        <p>Interface rápida e responsiva em qualquer dispositivo</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAINEL DIREITO (FORMULÁRIO) -->
+        <div class="login-panel login-form-panel">
+            <!-- ABAS DE NAVEGAÇÃO -->
+            <div class="form-tabs">
+                <button class="tab-btn active" data-tab="login">
+                    <span class="tab-icon">🔐</span>
+                    Login
+                </button>
+                <button class="tab-btn" data-tab="registro">
+                    <span class="tab-icon">📝</span>
+                    Registrar
+                </button>
+            </div>
+
+            <!-- FORMULÁRIO DE LOGIN -->
+            <div class="form-container active" id="tab-login">
+                <div class="form-header">
+                    <h2>Bem-vindo de volta!</h2>
+                    <p>Acesse sua conta para continuar</p>
+                </div>
+
+                <form id="form-login" class="auth-form">
+                    <!-- CAMPO EMAIL -->
+                    <div class="form-group">
+                        <label for="login-email" class="form-label">
+                            <span class="label-text">Email</span>
+                            <span class="label-icon">✉️</span>
+                        </label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="email" 
+                                id="login-email" 
+                                name="email" 
+                                class="form-input"
+                                placeholder="seu@email.com"
+                                required
+                                autocomplete="email"
+                            >
+                            <span class="input-icon">📧</span>
+                        </div>
+                        <span class="form-error" id="erro-email-login"></span>
+                    </div>
+
+                    <!-- CAMPO SENHA -->
+                    <div class="form-group">
+                        <label for="login-senha" class="form-label">
+                            <span class="label-text">Senha</span>
+                            <span class="label-icon">🔑</span>
+                        </label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="password" 
+                                id="login-senha" 
+                                name="senha" 
+                                class="form-input"
+                                placeholder="Sua senha segura"
+                                required
+                                autocomplete="current-password"
+                            >
+                            <button 
+                                type="button" 
+                                class="toggle-password"
+                                data-target="login-senha"
+                                title="Mostrar/Ocultar senha"
+                            >
+                                👁️
+                            </button>
+                        </div>
+                        <span class="form-error" id="erro-senha-login"></span>
+                    </div>
+
+                    <!-- LEMBRAR E RECUPERAR -->
+                    <div class="form-options">
+                        <label class="checkbox-custom">
+                            <input 
+                                type="checkbox" 
+                                id="lembrar-me" 
+                                name="lembrarMe"
+                            >
+                            <span class="checkbox-label">Lembrar-me neste dispositivo</span>
+                        </label>
+                        <a href="#" class="link-recuperar" id="link-recuperar-login">
+                            Esqueceu a senha?
+                        </a>
+                    </div>
+
+                    <!-- BOTÃO SUBMIT -->
+                    <button type="submit" class="btn-submit btn-login-submit">
+                        <span class="btn-text">Entrar</span>
+                        <span class="btn-loader" style="display: none;">
+                            <span class="spinner"></span>
+                        </span>
+                    </button>
+
+                    <!-- MENSAGEM DE ERRO -->
+                    <div class="alert alert-error" id="alerta-login" style="display: none;">
+                        <span class="alert-icon">⚠️</span>
+                        <span class="alert-text"></span>
+                        <button type="button" class="alert-close">✕</button>
+                    </div>
+
+                    <!-- MENSAGEM DE SUCESSO -->
+                    <div class="alert alert-success" id="alerta-sucesso-login" style="display: none;">
+                        <span class="alert-icon">✅</span>
+                        <span class="alert-text"></span>
+                        <button type="button" class="alert-close">✕</button>
+                    </div>
+                </form>
+
+                <!-- DIVISOR -->
+                <div class="form-divider">
+                    <span>ou</span>
+                </div>
+
+                <!-- LOGIN SOCIAL (OPCIONAL) -->
+                <div class="social-login">
+                    <button class="btn-social btn-google" title="Login com Google">
+                        <span class="social-icon">🔵</span>
+                        Google
+                    </button>
+                    <button class="btn-social btn-microsoft" title="Login com Microsoft">
+                        <span class="social-icon">🟦</span>
+                        Microsoft
+                    </button>
+                </div>
+            </div>
+
+            <!-- FORMULÁRIO DE REGISTRO -->
+            <div class="form-container" id="tab-registro">
+                <div class="form-header">
+                    <h2>Criar nova conta</h2>
+                    <p>Preencha os dados abaixo para se registrar</p>
+                </div>
+
+                <form id="form-registro" class="auth-form">
+                    <!-- CAMPO NOME -->
+                    <div class="form-group">
+                        <label for="registro-nome" class="form-label">
+                            <span class="label-text">Nome Completo</span>
+                            <span class="label-icon">👤</span>
+                        </label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="text" 
+                                id="registro-nome" 
+                                name="nome" 
+                                class="form-input"
+                                placeholder="Seu nome completo"
+                                required
+                                autocomplete="name"
+                            >
+                            <span class="input-icon">👤</span>
+                        </div>
+                        <span class="form-error" id="erro-nome-registro"></span>
+                    </div>
+
+                    <!-- CAMPO EMAIL -->
+                    <div class="form-group">
+                        <label for="registro-email" class="form-label">
+                            <span class="label-text">Email</span>
+                            <span class="label-icon">✉️</span>
+                        </label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="email" 
+                                id="registro-email" 
+                                name="email" 
+                                class="form-input"
+                                placeholder="seu@email.com"
+                                required
+                                autocomplete="email"
+                            >
+                            <span class="input-icon">📧</span>
+                        </div>
+                        <span class="form-error" id="erro-email-registro"></span>
+                    </div>
+
+                    <!-- CAMPO SENHA -->
+                    <div class="form-group">
+                        <label for="registro-senha" class="form-label">
+                            <span class="label-text">Senha</span>
+                            <span class="label-icon">🔑</span>
+                        </label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="password" 
+                                id="registro-senha" 
+                                name="senha" 
+                                class="form-input"
+                                placeholder="Mínimo 8 caracteres"
+                                required
+                                autocomplete="new-password"
+                            >
+                            <button 
+                                type="button" 
+                                class="toggle-password"
+                                data-target="registro-senha"
+                                title="Mostrar/Ocultar senha"
+                            >
+                                👁️
+                            </button>
+                        </div>
+                        <div class="password-strength" id="forca-senha">
+                            <div class="strength-bar"></div>
+                            <span class="strength-text">Força: Fraca</span>
+                        </div>
+                        <span class="form-error" id="erro-senha-registro"></span>
+                    </div>
+
+                    <!-- CAMPO CONFIRMAÇÃO SENHA -->
+                    <div class="form-group">
+                        <label for="registro-confirmacao" class="form-label">
+                            <span class="label-text">Confirmar Senha</span>
+                            <span class="label-icon">🔑</span>
+                        </label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="password" 
+                                id="registro-confirmacao" 
+                                name="confirmacaoSenha" 
+                                class="form-input"
+                                placeholder="Repita a senha"
+                                required
+                                autocomplete="new-password"
+                            >
+                            <button 
+                                type="button" 
+                                class="toggle-password"
+                                data-target="registro-confirmacao"
+                                title="Mostrar/Ocultar senha"
+                            >
+                                👁️
+                            </button>
+                        </div>
+                        <span class="form-error" id="erro-confirmacao-registro"></span>
+                    </div>
+
+                    <!-- CONSENTIMENTO LGPD — Art. 7 e 8, Lei 13.709/2018 -->
+                    <label class="checkbox-custom">
+                        <input
+                            type="checkbox"
+                            id="aceitar-termos"
+                            name="aceitarTermos"
+                            required
+                        >
+                        <span class="checkbox-label">
+                            Concordo com os
+                            <a href="#" class="link-inline">Termos de Serviço</a>
+                            e <a href="#" class="link-inline">Política de Privacidade</a>,
+                            e autorizo o tratamento dos meus dados pessoais (nome e e-mail)
+                            para fins de controle de acesso ao Portal de Transparência,
+                            conforme a <strong>Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018)</strong>.
+                        </span>
+                    </label>
+                    <span class="form-error" id="erro-termos-registro"></span>
+
+                    <!-- BOTÃO SUBMIT -->
+                    <button type="submit" class="btn-submit btn-registro-submit">
+                        <span class="btn-text">Criar Conta</span>
+                        <span class="btn-loader" style="display: none;">
+                            <span class="spinner"></span>
+                        </span>
+                    </button>
+
+                    <!-- MENSAGEM DE ERRO -->
+                    <div class="alert alert-error" id="alerta-registro" style="display: none;">
+                        <span class="alert-icon">⚠️</span>
+                        <span class="alert-text"></span>
+                        <button type="button" class="alert-close">✕</button>
+                    </div>
+
+                    <!-- MENSAGEM DE SUCESSO -->
+                    <div class="alert alert-success" id="alerta-sucesso-registro" style="display: none;">
+                        <span class="alert-icon">✅</span>
+                        <span class="alert-text"></span>
+                        <button type="button" class="alert-close">✕</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- RODAPÉ -->
+            <div class="form-footer">
+                <p class="footer-text">
+                    © 2025 ERP Financeiro. Todos os direitos reservados.
+                </p>
+                <div class="footer-links">
+                    <a href="#" class="footer-link">Suporte</a>
+                    <a href="#" class="footer-link">Documentação</a>
+                    <a href="#" class="footer-link">Status</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE RECUPERAÇÃO DE SENHA -->
+    <div class="modal" id="modal-recuperar">
+        <div class="modal-content">
+            <button class="modal-close" id="fechar-modal-recuperar">✕</button>
+            
+            <div class="modal-header">
+                <h2>Recuperar Senha</h2>
+                <p>Digite seu email para receber um link de recuperação</p>
+            </div>
+
+            <form id="form-recuperar" class="auth-form">
+                <div class="form-group">
+                    <label for="recuperar-email" class="form-label">Email</label>
+                    <div class="input-wrapper">
+                        <input 
+                            type="email" 
+                            id="recuperar-email" 
+                            name="email" 
+                            class="form-input"
+                            placeholder="seu@email.com"
+                            required
+                        >
+                        <span class="input-icon">📧</span>
+                    </div>
+                    <span class="form-error" id="erro-email-recuperar"></span>
+                </div>
+
+                <button type="submit" class="btn-submit">
+                    <span class="btn-text">Enviar Link de Recuperação</span>
+                    <span class="btn-loader" style="display: none;">
+                        <span class="spinner"></span>
+                    </span>
+                </button>
+
+                <div class="alert alert-error" id="alerta-recuperar" style="display: none;">
+                    <span class="alert-icon">⚠️</span>
+                    <span class="alert-text"></span>
+                    <button type="button" class="alert-close">✕</button>
+                </div>
+
+                <div class="alert alert-success" id="alerta-sucesso-recuperar" style="display: none;">
+                    <span class="alert-icon">✅</span>
+                    <span class="alert-text"></span>
+                    <button type="button" class="alert-close">✕</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- OVERLAY DO MODAL -->
+    <div class="modal-overlay" id="modal-overlay"></div>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase.js"></script>
+    <script src="usuario.js"></script>
+    <script src="login.js"></script>
+</body>
+</html>

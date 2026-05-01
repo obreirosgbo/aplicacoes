@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal de Transparência</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f8fafc; }
+        
+        .hero-section { 
+            background: linear-gradient(135deg, var(--color-primary) 0%, #059669 100%); 
+            color: white; 
+            padding: 4rem 2rem 6rem 2rem; 
+            text-align: center; 
+        }
+        
+        .hero-section h1 { 
+            font-size: 2.5rem; 
+            margin-bottom: 1rem; 
+            font-weight: 800;
+        }
+        
+        .hero-section p { 
+            font-size: 1.1rem; 
+            opacity: 0.9; 
+            max-width: 600px; 
+            margin: 0 auto; 
+        }
+        
+        .transparencia-container {
+            max-width: 1200px;
+            margin: -3rem auto 2rem auto;
+            padding: 0 1rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        .tabs-transparencia {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 1rem 2.5rem;
+            border: none;
+            background: white;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: var(--color-gray);
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px -1px rgba(0,0,0,0.15);
+        }
+
+        .tab-btn.active {
+            background: var(--color-primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(26, 95, 74, 0.4);
+        }
+
+        .view-section {
+            display: none;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            animation: fadeIn 0.4s ease;
+        }
+
+        .view-section.active { 
+            display: block; 
+        }
+
+        .export-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--color-border);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .export-bar h2 {
+            color: var(--color-dark);
+            margin: 0;
+        }
+
+        .export-bar div {
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+        }
+
+        @keyframes fadeIn { 
+            from { opacity: 0; } 
+            to { opacity: 1; } 
+        }
+
+        @media print {
+            .hero-section, .tabs-transparencia, .export-bar, .filter-container, .btn-detalhes { display: none !important; }
+            .transparencia-container { margin-top: 0; box-shadow: none; }
+            .view-section { box-shadow: none; padding: 0; }
+            body { background: white; }
+        }
+
+        @media (max-width: 768px) {
+            .hero-section h1 { font-size: 1.8rem; }
+            .hero-section p { font-size: 1rem; }
+            .transparencia-container { margin-top: -2rem; }
+            .tabs-transparencia { gap: 0.5rem; }
+            .tab-btn { padding: 0.8rem 1.5rem; font-size: 0.9rem; }
+            .export-bar { flex-direction: column; align-items: flex-start; }
+            .export-bar div { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="hero-section">
+        <h1>🏛️ Portal de Transparência</h1>
+        <p>Acompanhe de forma clara e objetiva as prestações de contas e lançamentos financeiros da nossa instituição.</p>
+    </div>
+
+    <div class="transparencia-container">
+        
+        <!-- ABAS DE NAVEGAÇÃO -->
+        <div class="tabs-transparencia">
+            <button class="tab-btn active" onclick="mudarAba('eventos', this)">📋 Prestações de Contas</button>
+            <button class="tab-btn" onclick="mudarAba('lancamentos', this)">📊 Extrato Detalhado</button>
+        </div>
+
+        <!-- SEÇÃO: EVENTOS DE PRESTAÇÃO DE CONTAS -->
+        <div id="sec-eventos" class="view-section active">
+            <div class="export-bar">
+                <h2>Prestações de Contas por Evento</h2>
+                <div>
+                    <button class="btn-primary" onclick="abrirModalGerarPrestacaoTransparencia()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📊 Gerar Prestação</button>
+                    <button class="btn-primary" onclick="window.print()">🖨️ Salvar PDF</button>
+                </div>
+            </div>
+            <div id="public-eventos-grid" class="eventos-grid">
+                <!-- Preenchido via JS -->
+            </div>
+        </div>
+
+        <!-- SEÇÃO: LANÇAMENTOS DETALHADOS -->
+        <div id="sec-lancamentos" class="view-section">
+            <div class="export-bar">
+                <h2>Extrato de Lançamentos</h2>
+                <div>
+                    <button class="btn-secondary" onclick="exportarPublicoCSV()">📥 Exportar Excel</button>
+                    <button class="btn-primary" onclick="window.print()">🖨️ Salvar PDF</button>
+                </div>
+            </div>
+
+            <!-- Filtros Públicos -->
+            <div class="filter-container" style="border-left-color: var(--color-success); margin-bottom: 1.5rem;">
+                <div class="filter-group">
+                    <label>Mês/Ano</label>
+                    <input type="month" id="pub-filtro-mes">
+                </div>
+                <div class="filter-group">
+                    <label>Tipo</label>
+                    <select id="pub-filtro-tipo">
+                        <option value="">Todos</option>
+                        <option value="RECEITA">Receitas</option>
+                        <option value="DESPESA">Despesas</option>
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button class="btn-primary" onclick="filtrarLancamentosPublicos()">Filtrar</button>
+                    <button class="btn-secondary" onclick="limparFiltrosPublicos()">Limpar</button>
+                </div>
+            </div>
+
+            <div class="table-container mt-2">
+                <table class="table-data">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Categoria</th>
+                            <th>Descrição</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="public-lancamentos-body">
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE DETALHES DO EVENTO -->
+    <div id="modal-detalhes-evento" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="detalhes-evento-titulo">Detalhes da Prestação de Contas</h3>
+                <span class="close-modal" onclick="fecharModalDetalhes()">&times;</span>
+            </div>
+            <div class="table-container mt-2">
+                <table class="table-data">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Histórico / Descrição</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detalhes-evento-body">
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="fecharModalDetalhes()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE GERAÇÃO DE PRESTAÇÃO (TRANSPARÊNCIA) -->
+    <div id="modal-gerar-prestacao-transparencia" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>Gerar Prestação de Contas</h3>
+                <span class="close-modal" onclick="fecharModalGerarPrestacaoTransparencia()">&times;</span>
+            </div>
+            <form id="form-gerar-prestacao-transparencia">
+                <div class="form-group">
+                    <label>Data Inicial</label>
+                    <input type="date" id="prestacao-transparencia-data-inicio" required>
+                </div>
+                <div class="form-group">
+                    <label>Data Final</label>
+                    <input type="date" id="prestacao-transparencia-data-fim" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="fecharModalGerarPrestacaoTransparencia()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Gerar Relatório</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DE RELATÓRIO (TRANSPARÊNCIA) -->
+    <div id="modal-relatorio-prestacao-transparencia" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="relatorio-transparencia-titulo">Relatório de Prestação de Contas</h3>
+                <span class="close-modal" onclick="fecharModalRelatorioPrestacaoTransparencia()">&times;</span>
+            </div>
+            
+            <div class="modal-body">
+                <div class="evento-info-completa">
+                    <h4>📅 Período da Prestação</h4>
+                    <p id="relatorio-transparencia-periodo"></p>
+                </div>
+
+                <div class="evento-resumo-financeiro">
+                    <h4>💰 Resumo Financeiro Geral</h4>
+                    <div class="resumo-grid">
+                        <div class="resumo-item" style="border-top: 4px solid #10b981;">
+                            <span class="resumo-label">Total Arrecadado</span>
+                            <span class="resumo-valor text-success" id="relatorio-transparencia-receitas">R$ 0,00</span>
+                        </div>
+                        <div class="resumo-item" style="border-top: 4px solid #ef4444;">
+                            <span class="resumo-label">Total Gasto</span>
+                            <span class="resumo-valor text-danger" id="relatorio-transparencia-despesas">R$ 0,00</span>
+                        </div>
+                        <div class="resumo-item" style="border-top: 4px solid #3b82f6;">
+                            <span class="resumo-label">Resultado</span>
+                            <span class="resumo-valor" id="relatorio-transparencia-resultado">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-container mt-2" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+                    <div class="chart-box">
+                        <h3>Evolução Diária</h3>
+                        <canvas id="chart-transparencia-evolucao" style="max-height: 300px;"></canvas>
+                    </div>
+                    <div class="chart-box">
+                        <h3>Distribuição por Categoria</h3>
+                        <canvas id="chart-transparencia-composicao" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
+
+                <div class="evento-lancamentos-tabela mt-2">
+                    <h4>📋 Eventos Vinculados</h4>
+                    <div id="relatorio-transparencia-eventos"></div>
+                </div>
+
+                <div class="evento-lancamentos-tabela mt-2">
+                    <h4>📊 Lançamentos Não Vinculados a Eventos</h4>
+                    <div class="table-container">
+                        <table class="table-data">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Categoria</th>
+                                    <th>Histórico</th>
+                                    <th>Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="relatorio-transparencia-lancamentos-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="fecharModalRelatorioPrestacaoTransparencia()">Fechar</button>
+                <button type="button" class="btn-primary" onclick="imprimirRelatorioPrestacaoTransparencia()">🖨️ Imprimir</button>
+                <button type="button" class="btn-primary" onclick="exportarRelatorioPrestacaoTransparenciaCSV()">📥 Exportar Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase.js"></script>
+    <script src="usuario.js"></script>
+    <script src="transparencia.js"></script>
+</body>
+</html>
