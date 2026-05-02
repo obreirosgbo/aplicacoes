@@ -240,11 +240,23 @@ function redirecionarParaTransparencia() {
 // INICIALIZAÇÃO AUTOMÁTICA
 // ============================================
 
+// Promise compartilhada — app.js e transparencia.js aguardam esta promise
+// em vez de usar setTimeout, eliminando a race condition
+let _inicializacaoPromise = null;
+
+function aguardarInicializacao() {
+    return _inicializacaoPromise;
+}
+
 // Só inicializa nas páginas protegidas (não na login.html)
 if (!window.location.pathname.includes('login.html')) {
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', inicializarUsuario);
+        _inicializacaoPromise = new Promise(resolve => {
+            document.addEventListener('DOMContentLoaded', () =>
+                inicializarUsuario().then(resolve).catch(resolve)
+            );
+        });
     } else {
-        inicializarUsuario();
+        _inicializacaoPromise = inicializarUsuario();
     }
 }

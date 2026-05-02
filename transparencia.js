@@ -12,8 +12,10 @@ let chartTransparenciaEvolucao = null;
 let chartTransparenciaComposicao = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Guard de autenticação: aguarda usuario.js resolver a sessão
-    await new Promise(r => setTimeout(r, 400));
+    // Guard de autenticação: aguarda usuario.js resolver a sessão (promise real)
+    if (typeof aguardarInicializacao === 'function') {
+        await aguardarInicializacao();
+    }
 
     const perfil = typeof obterPerfilAtual === 'function' ? obterPerfilAtual() : null;
     if (!perfil || perfil.role !== 'user' || perfil.status !== 'approved') {

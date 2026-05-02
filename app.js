@@ -71,9 +71,10 @@ function carregarDados() {
 // INICIALIZAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // Aguarda inicializarUsuario() do usuario.js — ele já fez o guard de rota
-    // Pequeno delay para garantir que a sessão foi resolvida
-    await new Promise(r => setTimeout(r, 300));
+    // Aguarda inicializarUsuario() concluir (promise real, sem setTimeout)
+    if (typeof aguardarInicializacao === 'function') {
+        await aguardarInicializacao();
+    }
 
     const perfil = typeof obterPerfilAtual === 'function' ? obterPerfilAtual() : null;
     if (!perfil || perfil.role !== 'admin') return; // guard extra: só admin continua
