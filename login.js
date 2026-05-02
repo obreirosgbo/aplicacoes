@@ -169,27 +169,30 @@ async function handleRegistroSubmit(e) {
         return;
     }
     
+    const btn = document.querySelector('.btn-registro-submit');
+
     try {
-        // Mostrar carregamento
-        const btn = document.querySelector('.btn-registro-submit');
         mostrarCarregamento(btn);
-        
-        // Registrar
+
         await registrar({
             nome,
             email,
             senha,
             confirmacaoSenha: confirmacao
         });
-        
-        // Limpar formulário e mostrar mensagem de aguardo
+
+        ocultarCarregamento(btn);
         document.getElementById('form-registro').reset();
         mostrarSucesso('registro',
             'Solicitação enviada! Seu acesso será analisado pelo administrador. Você será notificado quando for aprovado.'
         );
-        
+
+        setTimeout(() => {
+            document.querySelector('.tab-btn[data-tab="login"]').click();
+        }, 3000);
+
     } catch (erro) {
-        ocultarCarregamento(document.querySelector('.btn-registro-submit'));
+        ocultarCarregamento(btn);
         mostrarErroAlert('registro', erro.message);
     }
 }

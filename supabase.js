@@ -65,7 +65,7 @@ async function supabaseGetAllProfiles() {
     // Admin vê apenas o necessário para gerir acessos — Art. 6, III LGPD
     const { data, error } = await supabaseClient
         .from('profiles')
-        .select('id, nome, email, status, created_at')
+        .select('id, nome, email, role, status, created_at')
         .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
     return data;
@@ -83,6 +83,14 @@ async function supabaseUpdateProfileStatus(userId, novoStatus) {
         p_user_id: userId,
         p_new_status: novoStatus
     });
+    if (error) throw new Error(error.message);
+}
+
+async function supabaseUpdateProfileRole(userId, newRole) {
+    const { error } = await supabaseClient
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
     if (error) throw new Error(error.message);
 }
 

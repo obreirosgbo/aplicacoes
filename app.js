@@ -1713,7 +1713,7 @@ function renderizarControleAcessos(usuarios) {
     if (!tbody) return;
 
     if (!usuarios || usuarios.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding:2rem;">Nenhum usuário encontrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding:2rem;">Nenhum usuário encontrado.</td></tr>';
         return;
     }
 
@@ -1724,6 +1724,14 @@ function renderizarControleAcessos(usuarios) {
     };
 
     tbody.innerHTML = usuarios.map(u => {
+        const roleAtual = u.role || 'user';
+        const roleSelect = `
+            <select id="role-select-${u.id}" style="padding:0.2rem 0.5rem;font-size:0.8rem;border-radius:4px;border:1px solid var(--color-border);">
+                <option value="user" ${roleAtual === 'user' ? 'selected' : ''}>Usuário</option>
+                <option value="admin" ${roleAtual === 'admin' ? 'selected' : ''}>Administrador</option>
+            </select>
+        `;
+
         let acoes = '';
         if (u.status === 'pending') {
             acoes = `
@@ -1731,7 +1739,10 @@ function renderizarControleAcessos(usuarios) {
                 <button class="btn-secondary" style="padding:0.3rem 0.8rem;font-size:0.8rem;margin-left:4px;" onclick="atualizarAcesso('${u.id}','rejected')">✘ Rejeitar</button>
             `;
         } else if (u.status === 'approved') {
-            acoes = `<button class="btn-secondary" style="padding:0.3rem 0.8rem;font-size:0.8rem;" onclick="atualizarAcesso('${u.id}','rejected')">🚫 Revogar</button>`;
+            acoes = `
+                <button class="btn-primary" style="padding:0.3rem 0.8rem;font-size:0.8rem;" onclick="salvarPerfil('${u.id}')">💾 Salvar</button>
+                <button class="btn-secondary" style="padding:0.3rem 0.8rem;font-size:0.8rem;margin-left:4px;" onclick="atualizarAcesso('${u.id}','rejected')">🚫 Revogar</button>
+            `;
         } else {
             acoes = `<button class="btn-primary" style="padding:0.3rem 0.8rem;font-size:0.8rem;" onclick="atualizarAcesso('${u.id}','approved')">✔ Aprovar</button>`;
         }
@@ -1744,6 +1755,7 @@ function renderizarControleAcessos(usuarios) {
                 <td>${u.email}</td>
                 <td>${data}</td>
                 <td>${statusLabel[u.status] || u.status}</td>
+                <td>${roleSelect}</td>
                 <td>${acoes}</td>
             </tr>
         `;
@@ -1755,11 +1767,33 @@ async function atualizarAcesso(userId, novoStatus) {
     if (!confirm(`Confirma marcar este acesso como ${labels[novoStatus] || novoStatus}?`)) return;
 
     try {
+        if (novoStatus === 'approved') {
+            const roleSelect = document.getElementById(`role-select-${userId}`);
+            if (roleSelect) {
+                await supabaseUpdateProfileRole(userId, roleSelect.value);
+            }
+        }
         await supabaseUpdateProfileStatus(userId, novoStatus);
         await carregarControleAcessos();
         registrarHistorico('ACESSO', `Acesso ${novoStatus} para usuário ID ${userId}`);
     } catch (erro) {
         alert('Erro ao atualizar acesso: ' + erro.message);
+    }
+}
+
+async function salvarPerfil(userId) {
+    const roleSelect = document.getElementById(`role-select-${userId}`);
+    if (!roleSelect) return;
+    const role = roleSelect.value;
+    const label = role === 'admin' ? 'Administrador' : 'Usuário';
+    if (!confirm(`Confirma alterar o perfil deste usuário para "${label}"?`)) return;
+
+    try {
+        await supabaseUpdateProfileRole(userId, role);
+        await carregarControleAcessos();
+        registrarHistorico('ACESSO', `Perfil alterado para ${role} — usuário ID ${userId}`);
+    } catch (erro) {
+        alert('Erro ao atualizar perfil: ' + erro.message);
     }
 }
 
