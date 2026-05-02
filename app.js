@@ -13,78 +13,58 @@ function salvarDados() {
     localStorage.setItem('erp_financeiro_data', JSON.stringify(appData));
 }
 
-// Função para carregar dados ou gerar MOCK
+// Função para carregar dados do localStorage
 function carregarDados() {
     const dadosSalvos = localStorage.getItem('erp_financeiro_data');
-    
+
     if (dadosSalvos) {
         appData = JSON.parse(dadosSalvos);
-    } else {
-        // GERANDO DADOS SIMULADOS PARA APRESENTAÇÃO
-        appData.tipificacoes = [
-            { id: 1, nome: 'Festas e Eventos' },
-            { id: 2, nome: 'Assistência Social' },
-            { id: 3, nome: 'Despesas Fixas' },
-            { id: 4, nome: 'Doações' }
-        ];
-
-        appData.lancamentos = [
-            { id: 101, data: '2025-10-10', tipo: 'RECEITA', tipificacao: 'Festas e Eventos', historico: 'Venda de Ingressos', descricao: 'Lote 1 - Jantar', valor: 5000.00 },
-            { id: 102, data: '2025-10-12', tipo: 'DESPESA', tipificacao: 'Festas e Eventos', historico: 'Pagamento Buffet', descricao: 'Sinal de 50%', valor: 2000.00 },
-            { id: 103, data: '2025-10-15', tipo: 'DESPESA', tipificacao: 'Festas e Eventos', historico: 'Decoração', descricao: 'Flores e toalhas', valor: 800.00 },
-            { id: 104, data: '2025-11-05', tipo: 'RECEITA', tipificacao: 'Doações', historico: 'Campanha do Agasalho', descricao: 'Arrecadação PIX', valor: 3500.00 },
-            { id: 105, data: '2025-11-10', tipo: 'DESPESA', tipificacao: 'Assistência Social', historico: 'Compra Cestas Básicas', descricao: 'Atacadão', valor: 3000.00 },
-            { id: 106, data: '2025-11-15', tipo: 'DESPESA', tipificacao: 'Despesas Fixas', historico: 'Conta de Luz', descricao: 'Enel', valor: 450.00 },
-            { id: 107, data: '2025-12-01', tipo: 'RECEITA', tipificacao: 'Doações', historico: 'Doação Anônima', descricao: 'Transferência Bancária', valor: 2000.00 },
-            { id: 108, data: '2025-12-05', tipo: 'DESPESA', tipificacao: 'Despesas Fixas', historico: 'Aluguel Sala', descricao: 'Dezembro', valor: 1500.00 }
-        ];
-
-        appData.eventos = [
-            {
-                id: 1,
-                nome: 'Jantar Beneficente de Outubro',
-                tipificacao: 'Festas e Eventos',
-                informacoes: 'Evento realizado para arrecadação de fundos para a reforma do telhado. Contou com a presença de 150 pessoas.',
-                lancamentosVinculados: [101, 102, 103],
-                dataCriacao: '2025-10-01T10:00:00.000Z'
-            },
-            {
-                id: 2,
-                nome: 'Ação Solidária de Novembro',
-                tipificacao: 'Assistência Social',
-                informacoes: 'Distribuição de cestas básicas para 50 famílias cadastradas na comunidade.',
-                lancamentosVinculados: [104, 105],
-                dataCriacao: '2025-11-01T10:00:00.000Z'
-            }
-        ];
-
-        appData.historico = [
-            { dataHora: new Date().toLocaleString('pt-BR'), acao: 'SISTEMA', detalhes: 'Geração de dados simulados', usuario: 'Admin' }
-        ];
-
-      appData.irmaos = []; // Adicione esta linha
-        salvarDados();
     }
+
+    // Garante que todas as listas existem mesmo em dados antigos
+    if (!appData.tipificacoes) appData.tipificacoes = [];
+    if (!appData.lancamentos)  appData.lancamentos  = [];
+    if (!appData.eventos)      appData.eventos      = [];
+    if (!appData.historico)    appData.historico     = [];
+    if (!appData.irmaos)       appData.irmaos       = [];
 }
 
 // ==========================================
 // INICIALIZAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // Aguarda inicializarUsuario() concluir (promise real, sem setTimeout)
+    // Navegação sempre disponível — independente do estado de auth
+    configurarNavegacao();
+
+    // Logout sempre disponível
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.addEventListener('click', () => logout());
+
+    // Aguarda Supabase resolver a sessão
     if (typeof aguardarInicializacao === 'function') {
         await aguardarInicializacao();
     }
 
     const perfil = typeof obterPerfilAtual === 'function' ? obterPerfilAtual() : null;
-    if (!perfil || perfil.role !== 'admin') return; // guard extra: só admin continua
 
-    carregarDados();
+    if (!perfil) {
+        console.error('[APP] Perfil não encontrado após inicialização. Redirecionando...');
+        window.location.href = 'login.html';
+        return;
+    }
 
+    if (perfil.role !== 'admin') {
+        console.warn('[APP] Usuário não é admin. Redirecionando...');
+        window.location.href = 'transparencia.html';
+        return;
+    }
+
+    // Exibe nome do admin
     const nomeEl = document.getElementById('user-name');
-    if (nomeEl) nomeEl.textContent = perfil ? `Olá, ${perfil.nome}` : 'Admin';
+    if (nomeEl) nomeEl.textContent = `Olá, ${perfil.nome}`;
 
-    configurarNavegacao();
+    // Carrega dados e configura formulários
+    carregarDados();
     configurarFormularios();
 
     renderizarTipificacoes();
@@ -96,8 +76,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderizarEventos();
     inicializarControle();
     carregarControleAcessos();
-
-    document.getElementById('logout-btn').addEventListener('click', () => logout());
 });
 
 // ==========================================
@@ -1867,4 +1845,92 @@ function importarIrmaosExcel(inputEl) {
     };
     reader.readAsArrayBuffer(arquivo);
 }
+function importarLancamentosExcel(inputEl) {
+    const arquivo = inputEl.files[0];
+    if (!arquivo) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const linhas = XLSX.utils.sheet_to_json(sheet, { raw: false });
+
+            if (!linhas.length) {
+                alert('Planilha vazia ou formato nao reconhecido.');
+                return;
+            }
+
+            const normalizar = obj => {
+                const n = {};
+                for (const k in obj) n[k.toLowerCase().trim()] = obj[k];
+                return n;
+            };
+
+            const tipificacoesValidas = new Set((appData.tipificacoes || []).map(t => t.nome.toLowerCase()));
+
+            let importados = 0;
+            let ignorados = 0;
+            const erros = [];
+
+            const proximoId = appData.lancamentos.length > 0
+                ? Math.max(...appData.lancamentos.map(l => l.id)) + 1
+                : 1;
+            let idAtual = proximoId;
+
+            linhas.forEach((linha, idx) => {
+                const l = normalizar(linha);
+
+                const dataRaw = (l['data'] || '').toString().trim();
+                const tipoRaw = (l['tipo'] || '').toString().trim().toUpperCase();
+                const categoriaRaw = (l['categoria'] || l['tipificacao'] || '').toString().trim();
+                const historico = (l['historico'] || '').toString().trim();
+                const descricao = (l['descricao'] || '').toString().trim();
+                const valorRaw = (l['valor'] || '').toString().replace(',', '.').trim();
+
+                if (!dataRaw) { ignorados++; erros.push('Linha ' + (idx + 2) + ': data ausente'); return; }
+                if (tipoRaw !== 'RECEITA' && tipoRaw !== 'DESPESA') {
+                    ignorados++;
+                    erros.push('Linha ' + (idx + 2) + ': tipo invalido ("' + tipoRaw + '") - use RECEITA ou DESPESA');
+                    return;
+                }
+
+                const valor = parseFloat(valorRaw);
+                if (isNaN(valor) || valor <= 0) {
+                    ignorados++;
+                    erros.push('Linha ' + (idx + 2) + ': valor invalido ("' + valorRaw + '")');
+                    return;
+                }
+
+                if (categoriaRaw && !tipificacoesValidas.has(categoriaRaw.toLowerCase())) {
+                    ignorados++;
+                    erros.push('Linha ' + (idx + 2) + ': categoria "' + categoriaRaw + '" nao encontrada nas tipificacoes');
+                    return;
+                }
+
+                appData.lancamentos.push({ id: idAtual++, data: dataRaw, tipo: tipoRaw, categoria: categoriaRaw, historico, descricao, valor });
+                importados++;
+            });
+
+            if (importados > 0) {
+                salvarDados();
+                renderizarLancamentos();
+                registrarHistorico('IMPORTACAO', importados + ' lancamento(s) importado(s) via Excel');
+            }
+
+            let msg = importados + ' lancamento(s) importado(s) com sucesso!';
+            if (ignorados > 0) {
+                msg += '\n' + ignorados + ' linha(s) ignorada(s):\n' + erros.slice(0, 5).join('\n');
+                if (erros.length > 5) msg += '\n... e mais ' + (erros.length - 5) + ' erros.';
+            }
+            alert(msg);
+
+        } catch (erro) {
+            alert('Erro ao ler o arquivo: ' + erro.message);
+        } finally {
+            inputEl.value = '';
+        }
+    };
+    reader.readAsArrayBuffer(arquivo);
 }

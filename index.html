@@ -169,6 +169,8 @@
                 <section id="lancamentos" class="page">
                     <div class="action-bar">
                         <button class="btn-primary" onclick="abrirModalLancamento()">+ Novo Lançamento</button>
+                        <button class="btn-secondary" onclick="document.getElementById('input-excel-lancamentos').click()">📥 Importar Excel</button>
+                        <input type="file" id="input-excel-lancamentos" accept=".xlsx,.xls,.csv" style="display:none" onchange="importarLancamentosExcel(this)">
                     </div>
                     <div class="table-container">
                         <table class="table-data">

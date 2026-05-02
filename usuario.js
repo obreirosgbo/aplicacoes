@@ -61,8 +61,8 @@ async function inicializarUsuario() {
         console.log('[USUARIO] Sessão ativa:', perfil.email, '| role:', perfil.role);
 
     } catch (erro) {
-        console.error('[USUARIO] Erro ao inicializar:', erro);
-        redirecionarParaLogin();
+        console.error('[USUARIO] Erro ao inicializar. Detalhes:', erro.message, erro);
+        // Não redireciona imediatamente — app.js vai detectar perfil null e agir
     }
 }
 

@@ -54,7 +54,7 @@ async function supabaseGetProfile(userId) {
     // Seleciona apenas os campos necessários — Art. 6, III LGPD (Necessidade)
     const { data, error } = await supabaseClient
         .from('profiles')
-        .select('id, nome, email, role, status, consentimento_lgpd, created_at')
+        .select('id, nome, email, role, status, created_at')
         .eq('id', userId)
         .single();
     if (error) throw new Error(error.message);
