@@ -2241,12 +2241,13 @@ function renderizarSidebarExercicios() {
     lista.innerHTML = orcExerciciosDisponiveis.map(ano => {
         const ativo = ano === orcExercicioAtivo;
         return `<button onclick="trocarExercicio(${ano})" style="
-            width:100%; text-align:left; padding:0.4rem 0.6rem;
-            border-radius:6px; border:none; cursor:pointer; font-size:0.9rem;
-            background:${ativo ? 'var(--color-primary)' : 'transparent'};
-            color:${ativo ? 'white' : '#334155'};
+            padding:0.3rem 0.85rem; border-radius:20px; border:2px solid;
+            cursor:pointer; font-size:0.85rem;
+            border-color:${ativo ? 'var(--color-primary)' : '#cbd5e1'};
+            background:${ativo ? 'var(--color-primary)' : 'white'};
+            color:${ativo ? 'white' : '#475569'};
             font-weight:${ativo ? '700' : '400'};
-        ">${ativo ? '● ' : ''}${ano}</button>`;
+        ">${ano}</button>`;
     }).join('');
 
     if (titulo) titulo.textContent = `Planejamento Orçamentário — ${orcExercicioAtivo}`;
