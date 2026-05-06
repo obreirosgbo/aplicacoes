@@ -2208,7 +2208,8 @@ function atualizarSelectsPlanosContas() {
 // ============================================================
 // ORÇAMENTO 2026 — Planilha interativa
 // ============================================================
-const ORC_EXERCICIO = 2026;
+let orcExercicioAtivo = 2026;
+let orcExerciciosDisponiveis = [];
 const ORC_MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CONTA_MENSALIDADES_ID = 4;
 const CONTA_INADIMPLENCIA_ID = 3;
@@ -2220,24 +2221,27 @@ async function carregarOrcamento() {
     const container = document.getElementById('orcamento-planilha-container');
     if (container) container.innerHTML = '<p class="text-muted" style="padding:2rem;">Carregando...</p>';
 
+    await carregarExercicios();
+
     for (let m = 1; m <= 12; m++) {
-        orcParam[m] = { ano: ORC_EXERCICIO, mes: m,
+        orcParam[m] = { ano: orcExercicioAtivo, mes: m,
             obreiros_normal: 0, obreiros_remido: 0, obreiros_licenciado: 0,
             mensalidade_normal: 0, mensalidade_remido: 0, mensalidade_licenciado: 0,
             taxa_inadimplencia: 0, taxa_gob: 0, taxa_godf: 0 };
     }
 
     const { data: params, error: ep } = await supabaseClient
-        .from('orcamento_parametros').select('*').eq('ano', ORC_EXERCICIO);
+        .from('orcamento_parametros').select('*').eq('ano', orcExercicioAtivo);
     if (ep) { console.error('orcamento_parametros:', ep); }
     (params || []).forEach(p => { orcParam[p.mes] = p; });
 
     const { data: valores, error: ev } = await supabaseClient
-        .from('orcamento_valores').select('*').eq('ano', ORC_EXERCICIO);
+        .from('orcamento_valores').select('*').eq('ano', orcExercicioAtivo);
     if (ev) { console.error('orcamento_valores:', ev); }
     orcValores = {};
     (valores || []).forEach(v => { orcValores[`${v.mes}_${v.conta_id}`] = parseFloat(v.valor) || 0; });
 
+    renderizarSidebarExercicios();
     renderizarParametros();
     renderizarPlanilha();
 }
@@ -2259,7 +2263,7 @@ async function salvarValorConta(contaId, mes, rawVal) {
     const val = parseFloat(rawVal) || 0;
     orcValores[`${mes}_${contaId}`] = val;
     await supabaseClient.from('orcamento_valores')
-        .upsert({ ano: ORC_EXERCICIO, mes, conta_id: contaId, valor: val },
+        .upsert({ ano: orcExercicioAtivo, mes, conta_id: contaId, valor: val },
                  { onConflict: 'ano,mes,conta_id' });
     renderizarPlanilha();
 }
