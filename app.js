@@ -2217,6 +2217,69 @@ const CONTA_INADIMPLENCIA_ID = 3;
 let orcParam = {};
 let orcValores = {};
 
+async function carregarExercicios() {
+    const { data, error } = await supabaseClient
+        .from('orcamento_parametros')
+        .select('ano')
+        .order('ano', { ascending: true });
+    if (error) { console.error('carregarExercicios:', error); return; }
+    const anos = [...new Set((data || []).map(r => r.ano))];
+    orcExerciciosDisponiveis = anos;
+    if (anos.length > 0 && !anos.includes(orcExercicioAtivo)) {
+        orcExercicioAtivo = anos[0];
+    }
+    if (anos.length === 0) {
+        orcExercicioAtivo = new Date().getFullYear();
+    }
+}
+
+function renderizarSidebarExercicios() {
+    const lista = document.getElementById('orcamento-exercicios-lista');
+    const titulo = document.getElementById('orcamento-titulo');
+    if (!lista) return;
+
+    lista.innerHTML = orcExerciciosDisponiveis.map(ano => {
+        const ativo = ano === orcExercicioAtivo;
+        return `<button onclick="trocarExercicio(${ano})" style="
+            width:100%; text-align:left; padding:0.4rem 0.6rem;
+            border-radius:6px; border:none; cursor:pointer; font-size:0.9rem;
+            background:${ativo ? 'var(--color-primary)' : 'transparent'};
+            color:${ativo ? 'white' : '#334155'};
+            font-weight:${ativo ? '700' : '400'};
+        ">${ativo ? '● ' : ''}${ano}</button>`;
+    }).join('');
+
+    if (titulo) titulo.textContent = `Planejamento Orçamentário — ${orcExercicioAtivo}`;
+}
+
+async function trocarExercicio(ano) {
+    orcExercicioAtivo = ano;
+    orcParam = {};
+    orcValores = {};
+    const container = document.getElementById('orcamento-planilha-container');
+    if (container) container.innerHTML = '<p class="text-muted" style="padding:2rem;">Carregando...</p>';
+
+    for (let m = 1; m <= 12; m++) {
+        orcParam[m] = { ano: orcExercicioAtivo, mes: m,
+            obreiros_normal: 0, obreiros_remido: 0, obreiros_licenciado: 0,
+            mensalidade_normal: 0, mensalidade_remido: 0, mensalidade_licenciado: 0,
+            taxa_inadimplencia: 0, taxa_gob: 0, taxa_godf: 0 };
+    }
+
+    const { data: params } = await supabaseClient
+        .from('orcamento_parametros').select('*').eq('ano', orcExercicioAtivo);
+    (params || []).forEach(p => { orcParam[p.mes] = p; });
+
+    const { data: valores } = await supabaseClient
+        .from('orcamento_valores').select('*').eq('ano', orcExercicioAtivo);
+    orcValores = {};
+    (valores || []).forEach(v => { orcValores[`${v.mes}_${v.conta_id}`] = parseFloat(v.valor) || 0; });
+
+    renderizarSidebarExercicios();
+    renderizarParametros();
+    renderizarPlanilha();
+}
+
 async function carregarOrcamento() {
     const container = document.getElementById('orcamento-planilha-container');
     if (container) container.innerHTML = '<p class="text-muted" style="padding:2rem;">Carregando...</p>';
@@ -2318,7 +2381,7 @@ function renderizarParametros() {
     const inputStyle = 'width:100%;border:none;text-align:right;padding:0.25rem;font-size:0.8rem;background:transparent;';
 
     container.innerHTML = `
-        <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Parâmetros Mensais — ${ORC_EXERCICIO}</p>
+        <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Parâmetros Mensais — ${orcExercicioAtivo}</p>
         <div style="overflow-x:auto;">
         <table style="border-collapse:collapse; min-width:1100px; width:100%;">
             <thead><tr style="background:#f1f5f9;">
