@@ -458,12 +458,50 @@
                      ORÇAMENTO
                       -->
                 <section id="orcamento" class="page">
-                    <div class="page-header">
-                        <h2>Planejamento Orçamentário — Exercício 2026</h2>
-                        <button class="btn-secondary" onclick="carregarOrcamento()">↻ Recarregar</button>
+                    <div style="display:flex; gap:1.5rem; align-items:flex-start;">
+
+                        <!-- Sidebar de exercícios -->
+                        <div id="orcamento-sidebar" style="min-width:160px; max-width:180px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:1rem; flex-shrink:0;">
+                            <p style="font-weight:700; font-size:0.85rem; color:#475569; margin-bottom:0.75rem; text-transform:uppercase; letter-spacing:0.05em;">Exercícios</p>
+                            <div id="orcamento-exercicios-lista" style="display:flex; flex-direction:column; gap:0.25rem; margin-bottom:1rem;"></div>
+                            <div style="display:flex; flex-direction:column; gap:0.5rem; border-top:1px solid #e2e8f0; padding-top:0.75rem;">
+                                <button class="btn-secondary" style="font-size:0.8rem; padding:0.35rem 0.6rem;" onclick="criarExercicio()">+ Novo</button>
+                                <button class="btn-secondary" style="font-size:0.8rem; padding:0.35rem 0.6rem;" onclick="abrirModalCopiarExercicio()">⧉ Copiar</button>
+                                <button class="btn-danger" id="btn-excluir-exercicio" style="font-size:0.8rem; padding:0.35rem 0.6rem;" onclick="excluirExercicio()">🗑 Excluir</button>
+                            </div>
+                        </div>
+
+                        <!-- Conteúdo principal -->
+                        <div style="flex:1; min-width:0;">
+                            <div class="page-header" style="margin-bottom:1.5rem;">
+                                <h2 id="orcamento-titulo">Planejamento Orçamentário</h2>
+                                <button class="btn-secondary" onclick="carregarOrcamento()">↻ Recarregar</button>
+                            </div>
+                            <div id="orcamento-parametros-container" style="margin-bottom:2rem;"></div>
+                            <div id="orcamento-planilha-container"></div>
+                        </div>
+
                     </div>
-                    <div id="orcamento-parametros-container" style="margin-bottom:2rem;"></div>
-                    <div id="orcamento-planilha-container"></div>
+
+                    <!-- Modal: Copiar exercício -->
+                    <div id="modal-copiar-exercicio" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
+                        <div style="background:white; border-radius:12px; padding:2rem; min-width:340px; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+                            <h3 style="margin-bottom:1.25rem;">Copiar Exercício</h3>
+                            <div style="margin-bottom:1rem;">
+                                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Ano de origem</label>
+                                <select id="copiar-origem" style="width:100%; padding:0.5rem; border:1px solid #cbd5e1; border-radius:6px;"></select>
+                            </div>
+                            <div style="margin-bottom:1.5rem;">
+                                <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.35rem;">Ano destino (novo)</label>
+                                <input type="number" id="copiar-destino" min="2020" max="2099" placeholder="Ex: 2027"
+                                    style="width:100%; padding:0.5rem; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                            </div>
+                            <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
+                                <button class="btn-secondary" onclick="fecharModalCopiarExercicio()">Cancelar</button>
+                                <button class="btn-primary" onclick="confirmarCopiarExercicio()">Copiar</button>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- 
