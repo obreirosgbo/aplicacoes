@@ -24,6 +24,8 @@
                 <a href="#controle" class="nav-link" data-page="controle">📈 Relatórios</a>
                 <a href="#prestacoes" class="nav-link" data-page="prestacoes">📋 Prestação de Contas</a>
                 <a href="#irmãos" class="nav-link" data-page="irmãos">👥 Irmãos</a>
+                <a href="#orcamento" class="nav-link" data-page="orcamento">💵 Orçamento</a>
+                <a href="#plano-contas" class="nav-link" data-page="plano-contas">📊 Plano de Contas</a>
                 <a href="#configuracoes" class="nav-link" data-page="configuracoes">⚙️ Configurações</a>
                 <a href="#controle-acessos" class="nav-link" data-page="controle-acessos">🔑 Controle de Acessos <span id="badge-pendentes" class="badge-pendentes" style="display:none;"></span></a>
             </nav>
@@ -136,6 +138,47 @@
                         <div class="chart-box">
                             <h3>⚖️ Receitas vs Despesas por Categoria</h3>
                             <canvas id="chart-tipificacao-dashboard" style="max-height: 350px;"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- ORÇADO X REALIZADO 2026 -->
+                    <div class="mt-2">
+                        <h3 style="margin-bottom:1rem;">📊 Orçado x Realizado — 2026</h3>
+                        <div class="dashboard-premium-grid" style="margin-bottom:1.5rem;">
+                            <div class="card-premium bg-white border-success">
+                                <div class="card-icon text-success">📈</div>
+                                <div class="card-info">
+                                    <h3 class="text-gray">Receitas Orçadas 2026</h3>
+                                    <p class="card-value text-dark" id="dash-orc-receitas">R$ 0,00</p>
+                                    <small class="text-muted">Realizado: <span id="dash-real-receitas">R$ 0,00</span></small>
+                                </div>
+                            </div>
+                            <div class="card-premium bg-white border-danger">
+                                <div class="card-icon text-danger">📉</div>
+                                <div class="card-info">
+                                    <h3 class="text-gray">Despesas Orçadas 2026</h3>
+                                    <p class="card-value text-dark" id="dash-orc-despesas">R$ 0,00</p>
+                                    <small class="text-muted">Realizado: <span id="dash-real-despesas">R$ 0,00</span></small>
+                                </div>
+                            </div>
+                            <div class="card-premium bg-white border-info">
+                                <div class="card-icon text-info">🎯</div>
+                                <div class="card-info">
+                                    <h3 class="text-gray">% Receita Realizada</h3>
+                                    <p class="card-value text-dark" id="dash-pct-receita">0%</p>
+                                </div>
+                            </div>
+                            <div class="card-premium bg-white border-warning">
+                                <div class="card-icon text-warning">🎯</div>
+                                <div class="card-info">
+                                    <h3 class="text-gray">% Despesa Realizada</h3>
+                                    <p class="card-value text-dark" id="dash-pct-despesa">0%</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-box">
+                            <h3>📊 Orçado x Realizado por Mês</h3>
+                            <canvas id="chart-orc-realizado" style="max-height:350px;"></canvas>
                         </div>
                     </div>
 
@@ -409,6 +452,30 @@
                         </div>
                     </div>
                 </section>
+
+                                <!--
+                     ORÇAMENTO
+                      -->
+                <section id="orcamento" class="page">
+                    <div class="page-header">
+                        <h2>Planejamento Orçamentário — Exercício 2026</h2>
+                        <button class="btn-secondary" onclick="carregarOrcamento()">↻ Recarregar</button>
+                    </div>
+                    <div id="orcamento-parametros-container" style="margin-bottom:2rem;"></div>
+                    <div id="orcamento-planilha-container"></div>
+                </section>
+
+                <!-- 
+                     PLANO DE CONTAS
+                      -->
+                <section id="plano-contas" class="page">
+                    <div class="page-header">
+                        <h2>Configurar Plano de Contas</h2>
+                        <button class="btn-primary" onclick="abrirModalGrupoContas()">+ Novo Grupo</button>
+                    </div>
+
+                    <div id="grupos-contas-container"></div>
+                </section>
             </div>
         </main>
     </div>
@@ -427,15 +494,18 @@
                 
                 <div class="form-group">
                     <label>Tipo</label>
-                    <select id="lancamento-tipo" required>
+                    <select id="lancamento-tipo" required onchange="filtrarContasPorTipo()">
+                        <option value="">Selecione...</option>
                         <option value="RECEITA">Receita</option>
                         <option value="DESPESA">Despesa</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label>Categoria</label>
-                    <select id="lancamento-tipificacao" required></select>
+                    <label>Conta</label>
+                    <select id="lancamento-tipificacao" required>
+                        <option value="">Selecione o tipo primeiro...</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -838,6 +908,75 @@
         </div>
     </div>
 
+    <!-- 
+         MODAL DE NOVO GRUPO DE CONTAS
+          -->
+    <div id="modal-grupo-contas" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="modal-grupo-title">Novo Grupo de Contas</h3>
+                <span class="close-modal" onclick="fecharModalGrupoContas()">&times;</span>
+            </div>
+            <form id="form-grupo-contas">
+                <input type="hidden" id="grupo-id">
+                
+                <div class="form-group">
+                    <label>Tipo</label>
+                    <select id="grupo-nome" required>
+                        <option value="">Selecione...</option>
+                        <option value="RECEITA">Receita</option>
+                        <option value="DESPESA">Despesa</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Descrição</label>
+                    <textarea id="grupo-descricao" rows="2" placeholder="Descrição do grupo..."></textarea>
+                </div>
+
+                <h4 style="margin-top: 2rem; margin-bottom: 1rem;">Contas</h4>
+                <div id="categorias-grupo-container" style="margin-bottom: 1.5rem;"></div>
+
+                <button type="button" class="btn-secondary" onclick="adicionarCategoriaGrupo()" style="width: 100%; margin-bottom: 1.5rem;">+ Adicionar Conta</button>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="fecharModalGrupoContas()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Salvar Grupo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 
+         MODAL DE EDIÇÃO DE CATEGORIA
+          -->
+    <div id="modal-categoria-contas" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Editar Conta</h3>
+                <span class="close-modal" onclick="fecharModalCategoriaContas()">&times;</span>
+            </div>
+            <form id="form-categoria-contas">
+                <input type="hidden" id="categoria-grupo-id">
+                <input type="hidden" id="categoria-index">
+
+                <div class="form-group">
+                    <label>Nome da Conta</label>
+                    <input type="text" id="categoria-nome" placeholder="Ex: Salários" required>
+                </div>
+
+                <h4 style="margin-top: 1.5rem; margin-bottom: 1rem;">Descrições</h4>
+                <div id="descricoes-categoria-container"></div>
+
+                <button type="button" class="btn-secondary" onclick="adicionarDescricaoCategoria()" style="width: 100%; margin-bottom: 1.5rem;">+ Adicionar Descrição</button>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="fecharModalCategoriaContas()">Cancelar</button>
+                    <button type="submit" class="btn-primary">Salvar Categoria</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <!-- SCRIPTS -->
     <script src="supabase.js"></script>
     <script src="usuario.js"></script>

@@ -75,6 +75,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     atualizarDashboardPremium();
     renderizarEventos();
     inicializarControle();
+    await carregarPlanoContasSupabase();
+    await carregarOrcamento();
     carregarControleAcessos();
 });
 
@@ -144,9 +146,37 @@ function excluirTipificacao(id) {
 }
 
 function atualizarSelectTipificacoes() {
+    // Evento usa tipificações antigas
     const options = '<option value="">Selecione...</option>' + appData.tipificacoes.map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
-    document.getElementById('lancamento-tipificacao').innerHTML = options;
     document.getElementById('evento-tipificacao').innerHTML = options;
+    // Lançamento: contas do plano (filtradas pelo tipo selecionado)
+    filtrarContasPorTipo();
+}
+
+function filtrarContasPorTipo() {
+    const tipo = document.getElementById('lancamento-tipo')?.value;
+    const select = document.getElementById('lancamento-tipificacao');
+    if (!select) return;
+
+    if (!tipo) {
+        select.innerHTML = '<option value="">Selecione o tipo primeiro...</option>';
+        return;
+    }
+
+    const contas = [];
+    (appData.planoContas || []).forEach(grupo => {
+        if (grupo.nome === tipo) {
+            (grupo.contas || grupo.categorias || []).forEach(c => {
+                contas.push(c.nome);
+            });
+        }
+    });
+
+    if (contas.length === 0) {
+        select.innerHTML = '<option value="">Nenhuma conta cadastrada para este tipo</option>';
+    } else {
+        select.innerHTML = '<option value="">Selecione...</option>' + contas.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
 }
 
 // ==========================================
@@ -161,6 +191,7 @@ function abrirModalLancamento(id = null) {
         const lanc = appData.lancamentos.find(l => l.id === id);
         document.getElementById('lancamento-id').value = lanc.id;
         document.getElementById('lancamento-tipo').value = lanc.tipo;
+        filtrarContasPorTipo();
         document.getElementById('lancamento-tipificacao').value = lanc.tipificacao;
         document.getElementById('lancamento-data').value = lanc.data;
         document.getElementById('lancamento-historico').value = lanc.historico;
@@ -567,7 +598,8 @@ function atualizarDashboardPremium() {
     document.getElementById('dash-qtd-lancamentos').textContent = appData.lancamentos.length;
 
     renderizarGraficoDashboard(receitas, despesas);
-    renderizarGraficosAdicionaisDashboard(); // ADICIONE ESTA LINHA
+    renderizarGraficosAdicionaisDashboard();
+    renderizarOrcadoRealizado();
 
 }
 
@@ -820,6 +852,96 @@ function formatarData(dataString) {
     const data = new Date(dataString);
     data.setMinutes(data.getMinutes() + data.getTimezoneOffset());
     return data.toLocaleDateString('pt-BR');
+}
+
+// ==========================================
+// ORÇADO X REALIZADO — DASHBOARD
+// ==========================================
+let chartOrcRealizado = null;
+
+function renderizarOrcadoRealizado() {
+    if (!appData.planoContas || appData.planoContas.length === 0) return;
+
+    const M = [1,2,3,4,5,6,7,8,9,10,11,12];
+    const receitas = appData.planoContas.filter(g => g.nome === 'RECEITA');
+    const despesas = appData.planoContas.filter(g => g.nome === 'DESPESA');
+
+    // Orçado por mês (usa funções do módulo de orçamento)
+    const orcRecMes  = m => receitas.reduce((a,g) => a + calcMesGrupo(g, m), 0);
+    const orcDesMes  = m => despesas.reduce((a,g) => a + calcMesGrupo(g, m), 0);
+    const orcRecAnual = M.reduce((a,m) => a + orcRecMes(m), 0);
+    const orcDesAnual = M.reduce((a,m) => a + orcDesMes(m), 0);
+
+    // Realizado por mês (lançamentos 2026)
+    const realRecMes = Array(13).fill(0);
+    const realDesMes = Array(13).fill(0);
+    (appData.lancamentos || []).forEach(l => {
+        const d = new Date(l.data);
+        d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+        if (d.getFullYear() !== ORC_EXERCICIO) return;
+        const m = d.getMonth() + 1;
+        if (l.tipo === 'RECEITA') realRecMes[m] += l.valor;
+        if (l.tipo === 'DESPESA') realDesMes[m] += l.valor;
+    });
+    const realRecAnual = realRecMes.reduce((a,v) => a+v, 0);
+    const realDesAnual = realDesMes.reduce((a,v) => a+v, 0);
+
+    // Atualizar cards
+    const el = id => document.getElementById(id);
+    if (el('dash-orc-receitas'))  el('dash-orc-receitas').textContent  = formatarMoeda(orcRecAnual);
+    if (el('dash-orc-despesas'))  el('dash-orc-despesas').textContent  = formatarMoeda(orcDesAnual);
+    if (el('dash-real-receitas')) el('dash-real-receitas').textContent = formatarMoeda(realRecAnual);
+    if (el('dash-real-despesas')) el('dash-real-despesas').textContent = formatarMoeda(realDesAnual);
+    if (el('dash-pct-receita'))   el('dash-pct-receita').textContent   = orcRecAnual > 0 ? ((realRecAnual/orcRecAnual)*100).toFixed(1)+'%' : '—';
+    if (el('dash-pct-despesa'))   el('dash-pct-despesa').textContent   = orcDesAnual > 0 ? ((realDesAnual/orcDesAnual)*100).toFixed(1)+'%' : '—';
+
+    // Gráfico
+    const ctx = document.getElementById('chart-orc-realizado');
+    if (!ctx) return;
+    if (chartOrcRealizado) chartOrcRealizado.destroy();
+    chartOrcRealizado = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ORC_MESES_LABELS,
+            datasets: [
+                {
+                    label: 'Receita Orçada',
+                    data: M.map(m => orcRecMes(m)),
+                    backgroundColor: 'rgba(34,197,94,0.3)',
+                    borderColor: 'rgba(34,197,94,1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Receita Realizada',
+                    data: M.map(m => realRecMes[m]),
+                    backgroundColor: 'rgba(34,197,94,0.8)',
+                    borderColor: 'rgba(34,197,94,1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Despesa Orçada',
+                    data: M.map(m => orcDesMes(m)),
+                    backgroundColor: 'rgba(239,68,68,0.3)',
+                    borderColor: 'rgba(239,68,68,1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Despesa Realizada',
+                    data: M.map(m => realDesMes[m]),
+                    backgroundColor: 'rgba(239,68,68,0.8)',
+                    borderColor: 'rgba(239,68,68,1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                y: { ticks: { callback: v => 'R$ '+v.toLocaleString('pt-BR') } }
+            }
+        }
+    });
 }
 
 // ==========================================
@@ -1968,3 +2090,518 @@ function importarLancamentosExcel(inputEl) {
     };
     reader.readAsArrayBuffer(arquivo);
 }
+//
+// MÓDULO: PLANO DE CONTAS E ORÇAMENTO
+//
+
+appData.planoContas = [];
+if (!appData.orcamentos) appData.orcamentos = [];
+
+async function carregarPlanoContasSupabase() {
+    const { data: planos, error: ePlanos } = await supabaseClient
+        .from('plano_contas')
+        .select('id, tipo, descricao')
+        .order('id');
+
+    if (ePlanos) { console.error('Erro ao carregar plano_contas:', ePlanos); return; }
+
+    const { data: contas, error: eContas } = await supabaseClient
+        .from('contas')
+        .select('id, plano_id, nome')
+        .order('id');
+
+    if (eContas) { console.error('Erro ao carregar contas:', eContas); return; }
+
+    const { data: descricoes, error: eDesc } = await supabaseClient
+        .from('conta_descricoes')
+        .select('conta_id, descricao');
+
+    if (eDesc) { console.error('Erro ao carregar conta_descricoes:', eDesc); return; }
+
+    appData.planoContas = planos.map(p => ({
+        id: p.id,
+        nome: p.tipo,
+        descricao: p.descricao || '',
+        contas: contas
+            .filter(c => c.plano_id === p.id)
+            .map(c => ({
+                id: c.id,
+                nome: c.nome,
+                descricoes: descricoes
+                    .filter(d => d.conta_id === c.id)
+                    .map(d => d.descricao)
+            }))
+    }));
+
+    renderizarPlanoContas();
+    atualizarSelectsPlanosContas();
+}
+
+// Renderizar Plano de Contas
+function renderizarPlanoContas() {
+    const container = document.getElementById('grupos-contas-container');
+
+    if (!appData.planoContas || appData.planoContas.length === 0) {
+        container.innerHTML = '<p class="text-muted" style="text-align: center; padding: 2rem;">Nenhum grupo configurado.</p>';
+        return;
+    }
+
+    const tipos = ['RECEITA', 'DESPESA'];
+
+    container.innerHTML = tipos.map(tipo => {
+        const gruposDeTipo = appData.planoContas
+            .map((g, idx) => ({ ...g, _idx: idx }))
+            .filter(g => g.nome === tipo);
+
+        if (gruposDeTipo.length === 0) return '';
+
+        const cor = tipo === 'RECEITA' ? 'receita' : 'despesa';
+        const bgHeader = tipo === 'RECEITA' ? '#e8f5e9' : '#fdecea';
+        const borderColor = tipo === 'RECEITA' ? '#4caf50' : '#f44336';
+
+        const gruposHTML = gruposDeTipo.map(grupo => `
+            <div style="margin-bottom: 1.5rem; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: #f8fafc;">
+                    <strong style="font-size: 0.95rem;">${grupo.descricao || grupo.nome}</strong>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn-icon" onclick="abrirModalGrupoContas(${grupo._idx})" title="Editar">✏️</button>
+                        <button class="btn-icon" onclick="excluirGrupoContas(${grupo._idx})" title="Excluir">🗑️</button>
+                    </div>
+                </div>
+                <div style="padding: 0.75rem 1rem;">
+                    ${(grupo.contas || []).length === 0
+                        ? '<p class="text-muted" style="margin:0; font-size:0.85rem;">Nenhuma conta cadastrada.</p>'
+                        : (grupo.contas || []).map((cat, catIdx) => `
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 0.4rem 0; border-bottom: 1px solid #f0f0f0;">
+                                <div>
+                                    <span style="font-size: 0.9rem;">${cat.nome}</span>
+                                    ${(cat.descricoes || []).length > 0
+                                        ? `<div style="font-size:0.78rem; color: var(--color-text-muted); margin-top:0.2rem;">${cat.descricoes.join(' · ')}</div>`
+                                        : ''}
+                                </div>
+                                <button class="btn-icon" onclick="editarCategoriaContas(${grupo._idx}, ${catIdx})" title="Editar" style="flex-shrink:0; margin-left:0.5rem;">✏️</button>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+            </div>
+        `).join('');
+
+        return `
+            <div style="margin-bottom: 2.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: ${bgHeader}; border-left: 4px solid ${borderColor}; border-radius: 4px;">
+                    <span class="badge badge-${cor}" style="font-size: 1rem; padding: 0.3rem 1rem;">${tipo}</span>
+                    <span class="text-muted" style="font-size: 0.85rem;">${gruposDeTipo.reduce((acc, g) => acc + (g.contas || []).length, 0)} contas cadastradas</span>
+                </div>
+                ${gruposHTML}
+            </div>
+        `;
+    }).join('');
+
+    atualizarSelectsPlanosContas();
+}
+
+function atualizarSelectsPlanosContas() {
+    // selects removidos com a nova tela de orçamento — mantido vazio para compatibilidade
+}
+
+// ============================================================
+// ORÇAMENTO 2026 — Planilha interativa
+// ============================================================
+const ORC_EXERCICIO = 2026;
+const ORC_MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const CONTA_MENSALIDADES_ID = 4;
+const CONTA_INADIMPLENCIA_ID = 3;
+
+let orcParam = {};
+let orcValores = {};
+
+async function carregarOrcamento() {
+    const container = document.getElementById('orcamento-planilha-container');
+    if (container) container.innerHTML = '<p class="text-muted" style="padding:2rem;">Carregando...</p>';
+
+    for (let m = 1; m <= 12; m++) {
+        orcParam[m] = { ano: ORC_EXERCICIO, mes: m,
+            obreiros_normal: 0, obreiros_remido: 0, obreiros_licenciado: 0,
+            mensalidade_normal: 0, mensalidade_remido: 0, mensalidade_licenciado: 0,
+            taxa_inadimplencia: 0, taxa_gob: 0, taxa_godf: 0 };
+    }
+
+    const { data: params, error: ep } = await supabaseClient
+        .from('orcamento_parametros').select('*').eq('ano', ORC_EXERCICIO);
+    if (ep) { console.error('orcamento_parametros:', ep); }
+    (params || []).forEach(p => { orcParam[p.mes] = p; });
+
+    const { data: valores, error: ev } = await supabaseClient
+        .from('orcamento_valores').select('*').eq('ano', ORC_EXERCICIO);
+    if (ev) { console.error('orcamento_valores:', ev); }
+    orcValores = {};
+    (valores || []).forEach(v => { orcValores[`${v.mes}_${v.conta_id}`] = parseFloat(v.valor) || 0; });
+
+    renderizarParametros();
+    renderizarPlanilha();
+}
+
+async function salvarParametro(mes, campo, rawVal) {
+    const isPct = campo === 'taxa_inadimplencia';
+    const val = isPct ? (parseFloat(rawVal) || 0) / 100 : parseFloat(rawVal) || 0;
+    orcParam[mes] = { ...orcParam[mes], [campo]: val };
+    await supabaseClient.from('orcamento_parametros')
+        .upsert({ ...orcParam[mes] }, { onConflict: 'ano,mes' });
+    // Atualiza total de obreiros e recalcula planilha
+    const p = orcParam[mes];
+    const totEl = document.getElementById(`param-total-obreiros-${mes}`);
+    if (totEl) totEl.textContent = (p.obreiros_normal||0)+(p.obreiros_remido||0)+(p.obreiros_licenciado||0);
+    renderizarPlanilha();
+}
+
+async function salvarValorConta(contaId, mes, rawVal) {
+    const val = parseFloat(rawVal) || 0;
+    orcValores[`${mes}_${contaId}`] = val;
+    await supabaseClient.from('orcamento_valores')
+        .upsert({ ano: ORC_EXERCICIO, mes, conta_id: contaId, valor: val },
+                 { onConflict: 'ano,mes,conta_id' });
+    renderizarPlanilha();
+}
+
+function calcMensalidades(mes) {
+    const p = orcParam[mes] || {};
+    return ((p.obreiros_normal||0)*(p.mensalidade_normal||0))
+         + ((p.obreiros_remido||0)*(p.mensalidade_remido||0))
+         + ((p.obreiros_licenciado||0)*(p.mensalidade_licenciado||0));
+}
+
+function calcInadimplencia(mes) {
+    return -(calcMensalidades(mes) * (orcParam[mes]?.taxa_inadimplencia || 0));
+}
+
+function getValorConta(contaId, mes) {
+    if (contaId === CONTA_MENSALIDADES_ID) return calcMensalidades(mes);
+    if (contaId === CONTA_INADIMPLENCIA_ID) return calcInadimplencia(mes);
+    return orcValores[`${mes}_${contaId}`] || 0;
+}
+
+function calcAnualConta(contaId) {
+    let t = 0; for (let m=1;m<=12;m++) t += getValorConta(contaId, m); return t;
+}
+
+function calcMesGrupo(grupo, mes) {
+    return (grupo.contas||[]).reduce((a,c) => a + getValorConta(c.id, mes), 0);
+}
+
+function calcAnualGrupo(grupo) {
+    let t = 0; for (let m=1;m<=12;m++) t += calcMesGrupo(grupo, m); return t;
+}
+
+function renderizarParametros() {
+    const container = document.getElementById('orcamento-parametros-container');
+    if (!container) return;
+    const M = [1,2,3,4,5,6,7,8,9,10,11,12];
+    const rows = [
+        { key:'obreiros_normal',      label:'Nº Obreiros — Normal',            step:'1',    pct:false },
+        { key:'obreiros_remido',      label:'Nº Obreiros — Remido',            step:'1',    pct:false },
+        { key:'obreiros_licenciado',  label:'Nº Obreiros — Licenciado',        step:'1',    pct:false },
+        { key:'mensalidade_normal',   label:'Mensalidade Normal (R$)',          step:'0.01', pct:false },
+        { key:'mensalidade_remido',   label:'Mensalidade Remido (R$)',          step:'0.01', pct:false },
+        { key:'mensalidade_licenciado',label:'Mensalidade Licenciado (R$)',     step:'0.01', pct:false },
+        { key:'taxa_inadimplencia',   label:'Taxa de Inadimplência (%)',        step:'0.1',  pct:true  },
+        { key:'taxa_gob',             label:'Taxa GOB (R$)',                    step:'0.01', pct:false },
+        { key:'taxa_godf',            label:'Taxa GODF (R$)',                   step:'0.01', pct:false },
+    ];
+    const th = 'padding:0.45rem 0.5rem; border:1px solid #cbd5e1; text-align:center; font-size:0.8rem;';
+    const tdLabel = 'padding:0.35rem 0.75rem; border:1px solid #e2e8f0; background:#f8fafc; white-space:nowrap; font-size:0.8rem;';
+    const tdInput = 'padding:0.1rem; border:1px solid #e2e8f0;';
+    const inputStyle = 'width:100%;border:none;text-align:right;padding:0.25rem;font-size:0.8rem;background:transparent;';
+
+    container.innerHTML = `
+        <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Parâmetros Mensais — ${ORC_EXERCICIO}</p>
+        <div style="overflow-x:auto;">
+        <table style="border-collapse:collapse; min-width:1100px; width:100%;">
+            <thead><tr style="background:#f1f5f9;">
+                <th style="text-align:left;${th} min-width:220px;">Variável</th>
+                ${ORC_MESES_LABELS.map(l=>`<th style="${th} min-width:78px;">${l}</th>`).join('')}
+            </tr></thead>
+            <tbody>
+                ${rows.map(r=>`<tr>
+                    <td style="${tdLabel}">${r.label}</td>
+                    ${M.map(mes=>{
+                        const raw = orcParam[mes]?.[r.key] ?? 0;
+                        const disp = r.pct ? (raw*100).toFixed(1) : raw;
+                        return `<td style="${tdInput}"><input type="number" step="${r.step}" value="${disp}"
+                            style="${inputStyle}" onfocus="this.select()"
+                            onblur="salvarParametro(${mes},'${r.key}',this.value)"></td>`;
+                    }).join('')}
+                </tr>`).join('')}
+                <tr style="background:#dbeafe; font-weight:600;">
+                    <td style="${tdLabel} background:#dbeafe;">Total de Obreiros Contribuintes</td>
+                    ${M.map(mes=>{
+                        const p=orcParam[mes]||{};
+                        const tot=(p.obreiros_normal||0)+(p.obreiros_remido||0)+(p.obreiros_licenciado||0);
+                        return `<td id="param-total-obreiros-${mes}" style="text-align:right;padding:0.35rem 0.5rem;border:1px solid #bfdbfe;">${tot}</td>`;
+                    }).join('')}
+                </tr>
+            </tbody>
+        </table></div>`;
+}
+
+function renderizarPlanilha() {
+    const container = document.getElementById('orcamento-planilha-container');
+    if (!container || !appData.planoContas || appData.planoContas.length === 0) return;
+
+    const M = [1,2,3,4,5,6,7,8,9,10,11,12];
+    const receitas = appData.planoContas.filter(g => g.nome === 'RECEITA');
+    const despesas = appData.planoContas.filter(g => g.nome === 'DESPESA');
+
+    const totRecMes  = m => receitas.reduce((a,g)=>a+calcMesGrupo(g,m),0);
+    const totRecAnual = M.reduce((a,m)=>a+totRecMes(m),0);
+    const totDesMes  = m => despesas.reduce((a,g)=>a+calcMesGrupo(g,m),0);
+    const totDesAnual = M.reduce((a,m)=>a+totDesMes(m),0);
+    const resMes  = m => totRecMes(m) - totDesMes(m);
+    const resAnual = totRecAnual - totDesAnual;
+
+    const fv = v => (v===0||!v) ? '—' : v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const fp = (v,b) => (!b||b===0) ? '—' : ((v/b)*100).toFixed(2)+'%';
+
+    const S = {
+        th: 'padding:0.5rem 0.4rem; border:1px solid #475569; text-align:right; font-size:0.78rem;',
+        n1: 'background:#1e293b; color:white; font-weight:700; padding:0.5rem 0.4rem; text-align:right; border:1px solid #334155; font-size:0.78rem;',
+        n1d: 'background:#1e293b; color:white; font-weight:700; padding:0.5rem 0.75rem; border:1px solid #334155; white-space:nowrap; font-size:0.78rem;',
+        n2: 'background:#e2e8f0; font-weight:700; padding:0.4rem 0.4rem; text-align:right; border:1px solid #cbd5e1; font-size:0.78rem;',
+        n2d: 'background:#e2e8f0; font-weight:700; padding:0.4rem 1rem; border:1px solid #cbd5e1; white-space:nowrap; font-size:0.78rem;',
+        n3: 'background:white; padding:0.3rem 0.4rem; text-align:right; border:1px solid #e2e8f0; font-size:0.78rem;',
+        n3d: 'background:white; padding:0.3rem 1.5rem; border:1px solid #e2e8f0; white-space:nowrap; font-size:0.78rem;',
+        fc: 'background:#eff6ff; padding:0.3rem 0.4rem; text-align:right; border:1px solid #bfdbfe; font-size:0.78rem;',
+        inp: 'width:100%;border:none;text-align:right;padding:0.2rem;font-size:0.78rem;background:transparent;',
+        cellinp: 'padding:0.1rem; border:1px solid #e2e8f0;',
+    };
+
+    const rowN1 = (cod, label, getMes, anual) => `<tr>
+        <td style="${S.n1d}">${cod}  ${label}</td>
+        <td style="${S.n1}">${fv(anual/12)}</td>
+        <td style="${S.n1}">${fp(anual,totRecAnual)}</td>
+        ${M.map(m=>`<td style="${S.n1}">${fv(getMes(m))}</td>`).join('')}
+        <td style="${S.n1}">${fv(anual)}</td>
+    </tr>`;
+
+    const rowN2 = (cod, label, getMes, anual) => `<tr>
+        <td style="${S.n2d}">${cod}  ${label}</td>
+        <td style="${S.n2}">${fv(anual/12)}</td>
+        <td style="${S.n2}">${fp(anual,totRecAnual)}</td>
+        ${M.map(m=>`<td style="${S.n2}">${fv(getMes(m))}</td>`).join('')}
+        <td style="${S.n2}">${fv(anual)}</td>
+    </tr>`;
+
+    const rowConta = (conta, isFormula) => {
+        const anual = calcAnualConta(conta.id);
+        return `<tr>
+            <td style="${S.n3d}">${conta.nome}</td>
+            <td style="${isFormula?S.fc:S.n3}">${fv(anual/12)}</td>
+            <td style="${isFormula?S.fc:S.n3}">${fp(anual,totRecAnual)}</td>
+            ${M.map(m => {
+                const v = getValorConta(conta.id, m);
+                if (isFormula) return `<td style="${S.fc}">${fv(v)}</td>`;
+                return `<td style="${S.cellinp}"><input type="number" step="0.01"
+                    value="${v||''}" style="${S.inp}" onfocus="this.select()"
+                    onblur="salvarValorConta(${conta.id},${m},this.value)"></td>`;
+            }).join('')}
+            <td style="${isFormula?S.fc:S.n3}">${fv(anual)}</td>
+        </tr>`;
+    };
+
+    const rowResultado = () => {
+        const cor = resAnual >= 0 ? '#16a34a' : '#dc2626';
+        const st = `background:#0f172a; color:${cor}; font-weight:700; padding:0.5rem 0.4rem; text-align:right; border:1px solid #1e293b; font-size:0.78rem;`;
+        return `<tr>
+            <td style="background:#0f172a;color:${cor};font-weight:700;padding:0.5rem 0.75rem;border:1px solid #1e293b;white-space:nowrap;font-size:0.78rem;">RESULTADO FINAL</td>
+            <td style="${st}">${fv(resAnual/12)}</td>
+            <td style="${st}">${fp(resAnual,totRecAnual)}</td>
+            ${M.map(m=>{const v=resMes(m);const c=v>=0?'#16a34a':'#dc2626';
+                return `<td style="background:#0f172a;color:${c};font-weight:700;padding:0.5rem 0.4rem;text-align:right;border:1px solid #1e293b;font-size:0.78rem;">${fv(v)}</td>`;
+            }).join('')}
+            <td style="background:#0f172a;color:${cor};font-weight:700;padding:0.5rem 0.4rem;text-align:right;border:1px solid #1e293b;font-size:0.78rem;">${fv(resAnual)}</td>
+        </tr>`;
+    };
+
+    container.innerHTML = `
+        <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Projeção de Receitas e Despesas — ${ORC_EXERCICIO}</p>
+        <div style="overflow-x:auto;">
+        <table style="border-collapse:collapse; min-width:1500px; width:100%;">
+            <thead><tr style="background:#334155; color:white;">
+                <th style="text-align:left;${S.th} min-width:260px; position:sticky; left:0; z-index:2; background:#334155;">Descrição</th>
+                <th style="${S.th} min-width:90px;">Média Mensal</th>
+                <th style="${S.th} min-width:60px;">%</th>
+                ${ORC_MESES_LABELS.map(l=>`<th style="${S.th} min-width:78px;">${l}</th>`).join('')}
+                <th style="${S.th} min-width:90px;">Total</th>
+            </tr></thead>
+            <tbody>
+                ${rowN1('1','TOTAL DAS RECEITAS', totRecMes, totRecAnual)}
+                ${receitas.map((g,i)=>`
+                    ${rowN2(`1.${i+1}`, g.descricao, m=>calcMesGrupo(g,m), calcAnualGrupo(g))}
+                    ${(g.contas||[]).map(c=>rowConta(c, c.id===CONTA_MENSALIDADES_ID||c.id===CONTA_INADIMPLENCIA_ID)).join('')}
+                `).join('')}
+                ${rowN1('2','TOTAL DAS DESPESAS', totDesMes, totDesAnual)}
+                ${despesas.map((g,i)=>`
+                    ${rowN2(`2.${i+1}`, g.descricao, m=>calcMesGrupo(g,m), calcAnualGrupo(g))}
+                    ${(g.contas||[]).map(c=>rowConta(c, false)).join('')}
+                `).join('')}
+                ${rowResultado()}
+            </tbody>
+        </table></div>`;
+}
+
+// Funções de Plano de Contas
+function abrirModalGrupoContas(idx = null) {
+    document.getElementById('form-grupo-contas').reset();
+    document.getElementById('grupo-id').value = '';
+    document.getElementById('modal-grupo-title').textContent = 'Novo Grupo de Contas';
+    document.getElementById('categorias-grupo-container').innerHTML = '';
+
+    if (idx !== null) {
+        const grupo = appData.planoContas[idx];
+        document.getElementById('grupo-id').value = idx;
+        document.getElementById('grupo-nome').value = grupo.nome;
+        document.getElementById('grupo-descricao').value = grupo.descricao;
+        document.getElementById('modal-grupo-title').textContent = 'Editar Grupo de Contas';
+
+        (grupo.contas || grupo.categorias || []).forEach((cat, catIdx) => {
+            adicionarCategoriaGrupo(cat, catIdx);
+        });
+    } else {
+        adicionarCategoriaGrupo();
+    }
+
+    document.getElementById('modal-grupo-contas').classList.add('show');
+}
+
+function fecharModalGrupoContas() {
+    document.getElementById('modal-grupo-contas').classList.remove('show');
+}
+
+function adicionarCategoriaGrupo(categoria = null, catIdx = null) {
+    const container = document.getElementById('categorias-grupo-container');
+    const novoIdx = container.children.length;
+    const html = `
+        <div class="categoria-grupo-item" style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid var(--color-border);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <input type="text" class="categoria-nome" placeholder="Nome da Conta" value="${categoria ? categoria.nome : ''}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 4px; margin-right: 0.5rem;">
+                <button type="button" class="btn-icon" onclick="this.parentElement.parentElement.remove()" title="Remover">🗑️</button>
+            </div>
+            <div class="descricoes-categoria" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+                ${categoria ? categoria.descricoes.map((desc, descIdx) => `
+                    <div style="background: #f0f4ff; padding: 0.5rem 1rem; border-radius: 4px; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>${desc}</span>
+                        <button type="button" class="btn-icon" style="margin: 0; font-size: 0.9rem;" onclick="this.parentElement.remove()" title="Remover">✕</button>
+                    </div>
+                `).join('') : ''}
+            </div>
+            <button type="button" class="btn-secondary" style="width: 100%; padding: 0.5rem;" onclick="adicionarDescricaoGrupo(this)">+ Descrição</button>
+        </div>
+    `;
+    container.innerHTML += html;
+}
+
+function adicionarDescricaoGrupo(btn) {
+    const descricao = prompt('Digite a descrição:');
+    if (descricao) {
+        const container = btn.parentElement.querySelector('.descricoes-categoria');
+        const html = `
+            <div style="background: #f0f4ff; padding: 0.5rem 1rem; border-radius: 4px; display: flex; align-items: center; gap: 0.5rem;">
+                <span>${descricao}</span>
+                <button type="button" class="btn-icon" style="margin: 0; font-size: 0.9rem;" onclick="this.parentElement.remove()" title="Remover">✕</button>
+            </div>
+        `;
+        container.innerHTML += html;
+    }
+}
+
+document.getElementById('form-grupo-contas').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const idx = document.getElementById('grupo-id').value;
+    const nome = document.getElementById('grupo-nome').value;
+    const descricao = document.getElementById('grupo-descricao').value;
+
+    const contas = Array.from(document.querySelectorAll('.categoria-grupo-item')).map(item => {
+        const nomeCat = item.querySelector('.categoria-nome').value;
+        const descricoes = Array.from(item.querySelectorAll('.descricoes-categoria > div')).map(d => d.textContent.trim().replace('✕', '').trim());
+        return { nome: nomeCat, descricoes };
+    });
+
+    const dados = { nome, descricao, contas };
+
+    if (idx !== '') {
+        appData.planoContas[parseInt(idx)] = { ...appData.planoContas[parseInt(idx)], ...dados };
+        registrarHistorico('EDIÇÃO', `Plano de Contas: ${nome}`);
+    } else {
+        const novoId = Math.max(...appData.planoContas.map(p => p.id), 0) + 1;
+        appData.planoContas.push({ id: novoId, ...dados });
+        registrarHistorico('INSERÇÃO', `Plano de Contas: ${nome}`);
+    }
+
+    fecharModalGrupoContas();
+    renderizarPlanoContas();
+    renderizarOrcamentos();
+    salvarDados();
+});
+
+function excluirGrupoContas(idx) {
+    if (confirm('Tem certeza que deseja excluir este grupo?')) {
+        appData.planoContas.splice(idx, 1);
+        registrarHistorico('EXCLUSÃO', `Grupo de Contas removido`);
+        renderizarPlanoContas();
+        renderizarOrcamentos();
+        salvarDados();
+    }
+}
+
+function editarCategoriaContas(grupoIdx, catIdx) {
+    const grupo = appData.planoContas[grupoIdx];
+    const categoria = (grupo.contas || grupo.categorias || [])[catIdx];
+
+    document.getElementById('categoria-grupo-id').value = grupoIdx;
+    document.getElementById('categoria-index').value = catIdx;
+    document.getElementById('categoria-nome').value = categoria.nome;
+
+    const container = document.getElementById('descricoes-categoria-container');
+    container.innerHTML = categoria.descricoes.map((desc, idx) => `
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <input type="text" class="descricao-item" value="${desc}" style="flex: 1; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 4px;">
+            <button type="button" class="btn-icon" onclick="this.parentElement.remove()" title="Remover">🗑️</button>
+        </div>
+    `).join('');
+
+    document.getElementById('modal-categoria-contas').classList.add('show');
+}
+
+function fecharModalCategoriaContas() {
+    document.getElementById('modal-categoria-contas').classList.remove('show');
+}
+
+function adicionarDescricaoCategoria() {
+    const container = document.getElementById('descricoes-categoria-container');
+    const html = `
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <input type="text" class="descricao-item" placeholder="Nova descrição" style="flex: 1; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 4px;">
+            <button type="button" class="btn-icon" onclick="this.parentElement.remove()" title="Remover">🗑️</button>
+        </div>
+    `;
+    container.innerHTML += html;
+}
+
+document.getElementById('form-categoria-contas').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const grupoIdx = parseInt(document.getElementById('categoria-grupo-id').value);
+    const catIdx = parseInt(document.getElementById('categoria-index').value);
+    const nome = document.getElementById('categoria-nome').value;
+    const descricoes = Array.from(document.querySelectorAll('.descricao-item')).map(input => input.value.trim()).filter(v => v);
+
+    if (!appData.planoContas[grupoIdx].contas) appData.planoContas[grupoIdx].contas = appData.planoContas[grupoIdx].categorias || [];
+    appData.planoContas[grupoIdx].contas[catIdx] = { nome, descricoes };
+
+    registrarHistorico('EDIÇÃO', `Categoria: ${nome}`);
+    fecharModalCategoriaContas();
+    renderizarPlanoContas();
+    renderizarOrcamentos();
+    salvarDados();
+});
