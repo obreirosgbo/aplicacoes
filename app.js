@@ -2280,6 +2280,28 @@ async function trocarExercicio(ano) {
     renderizarPlanilha();
 }
 
+async function excluirExercicio() {
+    if (orcExerciciosDisponiveis.length <= 1) {
+        alert('Não é possível excluir o único exercício existente.');
+        return;
+    }
+    if (!confirm(`Excluir orçamento ${orcExercicioAtivo}? Esta ação não pode ser desfeita.`)) return;
+
+    const ano = orcExercicioAtivo;
+
+    const { error: ep } = await supabaseClient
+        .from('orcamento_parametros').delete().eq('ano', ano);
+    if (ep) { alert('Erro ao excluir parâmetros: ' + ep.message); return; }
+
+    const { error: ev } = await supabaseClient
+        .from('orcamento_valores').delete().eq('ano', ano);
+    if (ev) { alert('Erro ao excluir valores: ' + ev.message); return; }
+
+    orcExerciciosDisponiveis = orcExerciciosDisponiveis.filter(a => a !== ano);
+    const proximo = orcExerciciosDisponiveis[0];
+    await trocarExercicio(proximo);
+}
+
 function abrirModalCopiarExercicio() {
     const sel = document.getElementById('copiar-origem');
     if (!sel) return;
