@@ -2280,6 +2280,34 @@ async function trocarExercicio(ano) {
     renderizarPlanilha();
 }
 
+async function criarExercicio() {
+    const input = prompt('Informe o ano do novo exercício (ex: 2027):');
+    if (!input) return;
+    const ano = parseInt(input, 10);
+    if (isNaN(ano) || ano < 2020 || ano > 2099) {
+        alert('Ano inválido. Informe um valor entre 2020 e 2099.');
+        return;
+    }
+    if (orcExerciciosDisponiveis.includes(ano)) {
+        alert(`O exercício ${ano} já existe.`);
+        return;
+    }
+
+    const placeholders = [];
+    for (let m = 1; m <= 12; m++) {
+        placeholders.push({ ano, mes: m,
+            obreiros_normal: 0, obreiros_remido: 0, obreiros_licenciado: 0,
+            mensalidade_normal: 0, mensalidade_remido: 0, mensalidade_licenciado: 0,
+            taxa_inadimplencia: 0, taxa_gob: 0, taxa_godf: 0 });
+    }
+    const { error } = await supabaseClient.from('orcamento_parametros')
+        .upsert(placeholders, { onConflict: 'ano,mes' });
+    if (error) { alert('Erro ao criar exercício: ' + error.message); return; }
+
+    orcExerciciosDisponiveis = [...orcExerciciosDisponiveis, ano].sort((a,b) => a - b);
+    await trocarExercicio(ano);
+}
+
 async function carregarOrcamento() {
     const container = document.getElementById('orcamento-planilha-container');
     if (container) container.innerHTML = '<p class="text-muted" style="padding:2rem;">Carregando...</p>';
