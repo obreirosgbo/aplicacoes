@@ -3,7 +3,9 @@
     "allow": [
       "PowerShell(Get-ChildItem *)",
       "PowerShell(Test-Path *)",
-      "PowerShell(Get-Content *)"
+      "PowerShell(Get-Content *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }
