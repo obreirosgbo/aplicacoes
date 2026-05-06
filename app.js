@@ -2280,6 +2280,76 @@ async function trocarExercicio(ano) {
     renderizarPlanilha();
 }
 
+function abrirModalCopiarExercicio() {
+    const sel = document.getElementById('copiar-origem');
+    if (!sel) return;
+    sel.innerHTML = orcExerciciosDisponiveis
+        .map(a => `<option value="${a}">${a}</option>`).join('');
+    sel.value = orcExercicioAtivo;
+    const inp = document.getElementById('copiar-destino');
+    if (inp) inp.value = '';
+    const modal = document.getElementById('modal-copiar-exercicio');
+    if (modal) modal.style.display = 'flex';
+}
+
+function fecharModalCopiarExercicio() {
+    const modal = document.getElementById('modal-copiar-exercicio');
+    if (modal) modal.style.display = 'none';
+}
+
+async function confirmarCopiarExercicio() {
+    const origem = parseInt(document.getElementById('copiar-origem').value, 10);
+    const destino = parseInt(document.getElementById('copiar-destino').value, 10);
+
+    if (isNaN(destino) || destino < 2020 || destino > 2099) {
+        alert('Ano destino inválido. Informe um valor entre 2020 e 2099.');
+        return;
+    }
+    if (destino === origem) {
+        alert('O ano destino deve ser diferente do ano de origem.');
+        return;
+    }
+    if (orcExerciciosDisponiveis.includes(destino)) {
+        if (!confirm(`O exercício ${destino} já existe. Deseja sobrescrever todos os seus dados?`)) return;
+    }
+
+    fecharModalCopiarExercicio();
+
+    const { data: params } = await supabaseClient
+        .from('orcamento_parametros').select('*').eq('ano', origem);
+    const { data: valores } = await supabaseClient
+        .from('orcamento_valores').select('*').eq('ano', origem);
+
+    if (params && params.length > 0) {
+        const novosParams = params.map(({ id, ...rest }) => ({ ...rest, ano: destino }));
+        const { error } = await supabaseClient.from('orcamento_parametros')
+            .upsert(novosParams, { onConflict: 'ano,mes' });
+        if (error) { alert('Erro ao copiar parâmetros: ' + error.message); return; }
+    } else {
+        const placeholders = [];
+        for (let m = 1; m <= 12; m++) {
+            placeholders.push({ ano: destino, mes: m,
+                obreiros_normal: 0, obreiros_remido: 0, obreiros_licenciado: 0,
+                mensalidade_normal: 0, mensalidade_remido: 0, mensalidade_licenciado: 0,
+                taxa_inadimplencia: 0, taxa_gob: 0, taxa_godf: 0 });
+        }
+        await supabaseClient.from('orcamento_parametros')
+            .upsert(placeholders, { onConflict: 'ano,mes' });
+    }
+
+    if (valores && valores.length > 0) {
+        const novosValores = valores.map(({ id, ...rest }) => ({ ...rest, ano: destino }));
+        const { error } = await supabaseClient.from('orcamento_valores')
+            .upsert(novosValores, { onConflict: 'ano,mes,conta_id' });
+        if (error) { alert('Erro ao copiar valores: ' + error.message); return; }
+    }
+
+    if (!orcExerciciosDisponiveis.includes(destino)) {
+        orcExerciciosDisponiveis = [...orcExerciciosDisponiveis, destino].sort((a,b) => a - b);
+    }
+    await trocarExercicio(destino);
+}
+
 async function criarExercicio() {
     const input = prompt('Informe o ano do novo exercício (ex: 2027):');
     if (!input) return;
