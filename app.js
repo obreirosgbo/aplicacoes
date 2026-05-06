@@ -878,7 +878,7 @@ function renderizarOrcadoRealizado() {
     (appData.lancamentos || []).forEach(l => {
         const d = new Date(l.data);
         d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
-        if (d.getFullYear() !== ORC_EXERCICIO) return;
+        if (d.getFullYear() !== orcExercicioAtivo) return;
         const m = d.getMonth() + 1;
         if (l.tipo === 'RECEITA') realRecMes[m] += l.valor;
         if (l.tipo === 'DESPESA') realDesMes[m] += l.valor;
@@ -2610,7 +2610,7 @@ function renderizarPlanilha() {
     };
 
     container.innerHTML = `
-        <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Projeção de Receitas e Despesas — ${ORC_EXERCICIO}</p>
+        <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Projeção de Receitas e Despesas — ${orcExercicioAtivo}</p>
         <div style="overflow-x:auto;">
         <table style="border-collapse:collapse; min-width:1500px; width:100%;">
             <thead><tr style="background:#334155; color:white;">
