@@ -568,39 +568,10 @@ function exportarEventoCSV() {
 let graficoDashboard = null;
 
 function atualizarDashboardPremium() {
-    let receitas = 0, despesas = 0, maiorDespesa = 0;
-    
-    const mesAtual = new Date().getMonth();
-    const anoAtual = new Date().getFullYear();
-
-    appData.lancamentos.forEach(l => {
-        const dataLanc = new Date(l.data);
-        dataLanc.setMinutes(dataLanc.getMinutes() + dataLanc.getTimezoneOffset());
-        
-        if (dataLanc.getMonth() === mesAtual && dataLanc.getFullYear() === anoAtual) {
-            if (l.tipo === 'RECEITA') receitas += l.valor;
-            if (l.tipo === 'DESPESA') {
-                despesas += l.valor;
-                if (l.valor > maiorDespesa) maiorDespesa = l.valor;
-            }
-        }
-    });
-
-    const saldo = receitas - despesas;
-    const diasNoMes = new Date(anoAtual, mesAtual + 1, 0).getDate();
-    const mediaDiaria = despesas / diasNoMes;
-
-    document.getElementById('dash-saldo-geral').textContent = formatarMoeda(saldo);
-    document.getElementById('dash-total-receitas').textContent = formatarMoeda(receitas);
-    document.getElementById('dash-total-despesas').textContent = formatarMoeda(despesas);
-    document.getElementById('dash-maior-despesa').textContent = formatarMoeda(maiorDespesa);
-    document.getElementById('dash-media-diaria').textContent = formatarMoeda(mediaDiaria);
-    document.getElementById('dash-qtd-lancamentos').textContent = appData.lancamentos.length;
-
-    renderizarGraficoDashboard(receitas, despesas);
-    renderizarGraficosAdicionaisDashboard();
+    renderizarFiltroDashboard();
+    atualizarLabelResumoDashboard();
     renderizarOrcadoRealizado();
-
+    atualizarDashboardComFiltro(dashLancamentosFiltrados());
 }
 
 function renderizarGraficoDashboard(receitas, despesas) {
@@ -859,6 +830,101 @@ function formatarData(dataString) {
 // ==========================================
 let chartOrcRealizado = null;
 
+// ─── Dashboard period filter state ───────────────────────────────────────────
+let dashPeriodo = 'anual';   // 'anual' | 'semestral' | 'trimestral' | 'mensal' | 'intervalo'
+let dashSubValor = null;     // number: mes (1-12), trimestre (1-4), semestre (1-2)
+let dashDataInicio = null;   // string YYYY-MM-DD (intervalo)
+let dashDataFim    = null;   // string YYYY-MM-DD (intervalo)
+
+function atualizarLabelResumoDashboard() {
+    const el = document.getElementById('dash-resumo-label');
+    if (!el) return;
+    const nomeMes = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const labels = {
+        anual: `Anual — ${orcExercicioAtivo}`,
+        semestral: `S${dashSubValor||1} — ${orcExercicioAtivo}`,
+        trimestral: `T${dashSubValor||1} — ${orcExercicioAtivo}`,
+        mensal: `${nomeMes[dashSubValor||1]} — ${orcExercicioAtivo}`,
+        intervalo: dashDataInicio && dashDataFim ? `${dashDataInicio} a ${dashDataFim}` : `Intervalo`
+    };
+    el.textContent = labels[dashPeriodo] || '';
+}
+
+function setDashPeriodo(periodo) {
+    dashPeriodo = periodo;
+    // reset sub-valor sensibly
+    const hoje = new Date();
+    if (periodo === 'mensal')     dashSubValor = hoje.getMonth() + 1;
+    if (periodo === 'trimestral') dashSubValor = Math.ceil((hoje.getMonth() + 1) / 3);
+    if (periodo === 'semestral')  dashSubValor = hoje.getMonth() < 6 ? 1 : 2;
+    if (periodo === 'anual')      dashSubValor = null;
+    if (periodo === 'intervalo')  { dashDataInicio = null; dashDataFim = null; }
+    renderizarFiltroDashboard();
+    renderizarOrcadoRealizado();
+    atualizarDashboardComFiltro(dashLancamentosFiltrados());
+    atualizarLabelResumoDashboard();
+}
+
+function renderizarFiltroDashboard() {
+    const sub = document.getElementById('dash-filtro-sub');
+    if (!sub) return;
+    // Highlight active button
+    ['anual','semestral','trimestral','mensal','intervalo'].forEach(p => {
+        const btn = document.getElementById('dash-btn-'+p);
+        if (!btn) return;
+        btn.style.background = p === dashPeriodo ? '#1a5f4a' : 'transparent';
+        btn.style.color      = p === dashPeriodo ? 'white'   : '#64748b';
+    });
+    // Sub-selector
+    if (dashPeriodo === 'mensal') {
+        const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        sub.innerHTML = `<select onchange="dashSubValor=+this.value;renderizarOrcadoRealizado()" style="font-size:0.78rem;padding:0.25rem 0.4rem;border:1px solid #e2e8f0;border-radius:4px;">
+            ${meses.map((m,i)=>`<option value="${i+1}" ${dashSubValor===i+1?'selected':''}>${m}</option>`).join('')}
+        </select>`;
+    } else if (dashPeriodo === 'trimestral') {
+        sub.innerHTML = `<select onchange="dashSubValor=+this.value;renderizarOrcadoRealizado()" style="font-size:0.78rem;padding:0.25rem 0.4rem;border:1px solid #e2e8f0;border-radius:4px;">
+            ${[1,2,3,4].map(t=>`<option value="${t}" ${dashSubValor===t?'selected':''}>T${t}</option>`).join('')}
+        </select>`;
+    } else if (dashPeriodo === 'semestral') {
+        sub.innerHTML = `<select onchange="dashSubValor=+this.value;renderizarOrcadoRealizado()" style="font-size:0.78rem;padding:0.25rem 0.4rem;border:1px solid #e2e8f0;border-radius:4px;">
+            ${[1,2].map(s=>`<option value="${s}" ${dashSubValor===s?'selected':''}>S${s}</option>`).join('')}
+        </select>`;
+    } else if (dashPeriodo === 'intervalo') {
+        sub.innerHTML = `<input type="date" id="dash-orc-inicio" style="font-size:0.78rem;padding:0.25rem 0.4rem;border:1px solid #e2e8f0;border-radius:4px;" value="${dashDataInicio||''}">
+            <span style="font-size:0.75rem;color:#94a3b8;">até</span>
+            <input type="date" id="dash-orc-fim" style="font-size:0.78rem;padding:0.25rem 0.4rem;border:1px solid #e2e8f0;border-radius:4px;" value="${dashDataFim||''}">
+            <button onclick="dashDataInicio=document.getElementById('dash-orc-inicio').value;dashDataFim=document.getElementById('dash-orc-fim').value;renderizarOrcadoRealizado();" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:#1a5f4a;color:white;border:none;border-radius:4px;cursor:pointer;">OK</button>`;
+    } else {
+        sub.innerHTML = '';
+    }
+}
+
+// Retorna array de meses [1..12] cobertos pelo filtro atual
+// (null = modo intervalo — filtrar por data diretamente)
+function dashMesesFiltro() {
+    if (dashPeriodo === 'anual')      return [1,2,3,4,5,6,7,8,9,10,11,12];
+    if (dashPeriodo === 'mensal')     return [dashSubValor || 1];
+    if (dashPeriodo === 'trimestral') { const t = dashSubValor||1; return [(t-1)*3+1,(t-1)*3+2,(t-1)*3+3]; }
+    if (dashPeriodo === 'semestral')  { const s = dashSubValor||1; return s===1?[1,2,3,4,5,6]:[7,8,9,10,11,12]; }
+    return null; // intervalo: usar datas
+}
+
+// Retorna lançamentos filtrados pelo período do dashboard
+function dashLancamentosFiltrados() {
+    return (appData.lancamentos || []).filter(l => {
+        const d = new Date(l.data);
+        d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+        if (d.getFullYear() !== orcExercicioAtivo) return false;
+        if (dashPeriodo === 'intervalo') {
+            if (dashDataInicio && l.data < dashDataInicio) return false;
+            if (dashDataFim    && l.data > dashDataFim)    return false;
+            return true;
+        }
+        const meses = dashMesesFiltro();
+        return !meses || meses.includes(d.getMonth() + 1);
+    });
+}
+
 function renderizarOrcadoRealizado() {
     if (!appData.planoContas || appData.planoContas.length === 0) return;
 
@@ -866,82 +932,192 @@ function renderizarOrcadoRealizado() {
     const receitas = appData.planoContas.filter(g => g.nome === 'RECEITA');
     const despesas = appData.planoContas.filter(g => g.nome === 'DESPESA');
 
-    // Orçado por mês (usa funções do módulo de orçamento)
+    const meses = dashMesesFiltro(); // null = intervalo de datas
+
+    // Orçado — soma os meses relevantes
     const orcRecMes  = m => receitas.reduce((a,g) => a + calcMesGrupo(g, m), 0);
     const orcDesMes  = m => despesas.reduce((a,g) => a + calcMesGrupo(g, m), 0);
-    const orcRecAnual = M.reduce((a,m) => a + orcRecMes(m), 0);
-    const orcDesAnual = M.reduce((a,m) => a + orcDesMes(m), 0);
+    const mesesOrc   = meses || M; // para orçamento, sem filtro de data exata, usa todos
+    const orcRecAnual = mesesOrc.reduce((a,m) => a + orcRecMes(m), 0);
+    const orcDesAnual = mesesOrc.reduce((a,m) => a + orcDesMes(m), 0);
 
-    // Realizado por mês (lançamentos 2026)
+    // Realizado — filtra lançamentos pelo período
     const realRecMes = Array(13).fill(0);
     const realDesMes = Array(13).fill(0);
+    // Para desvio por grupo: acumula por plano_contas_id
+    const realPorConta = {};
     (appData.lancamentos || []).forEach(l => {
         const d = new Date(l.data);
         d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
         if (d.getFullYear() !== orcExercicioAtivo) return;
-        const m = d.getMonth() + 1;
-        if (l.tipo === 'RECEITA') realRecMes[m] += l.valor;
-        if (l.tipo === 'DESPESA') realDesMes[m] += l.valor;
+        // Filtro de período
+        if (dashPeriodo === 'intervalo') {
+            if (dashDataInicio && l.data < dashDataInicio) return;
+            if (dashDataFim    && l.data > dashDataFim)    return;
+        } else {
+            const m = d.getMonth() + 1;
+            if (meses && !meses.includes(m)) return;
+        }
+        const m2 = d.getMonth() + 1;
+        if (l.tipo === 'RECEITA') realRecMes[m2] += l.valor;
+        if (l.tipo === 'DESPESA') realDesMes[m2] += l.valor;
+        // por conta
+        if (!realPorConta[l.plano_contas_id]) realPorConta[l.plano_contas_id] = { rec: 0, des: 0 };
+        if (l.tipo === 'RECEITA') realPorConta[l.plano_contas_id].rec += l.valor;
+        if (l.tipo === 'DESPESA') realPorConta[l.plano_contas_id].des += l.valor;
     });
     const realRecAnual = realRecMes.reduce((a,v) => a+v, 0);
     const realDesAnual = realDesMes.reduce((a,v) => a+v, 0);
 
-    // Atualizar cards
-    const el = id => document.getElementById(id);
-    if (el('dash-orc-receitas'))  el('dash-orc-receitas').textContent  = formatarMoeda(orcRecAnual);
-    if (el('dash-orc-despesas'))  el('dash-orc-despesas').textContent  = formatarMoeda(orcDesAnual);
-    if (el('dash-real-receitas')) el('dash-real-receitas').textContent = formatarMoeda(realRecAnual);
-    if (el('dash-real-despesas')) el('dash-real-despesas').textContent = formatarMoeda(realDesAnual);
-    if (el('dash-pct-receita'))   el('dash-pct-receita').textContent   = orcRecAnual > 0 ? ((realRecAnual/orcRecAnual)*100).toFixed(1)+'%' : '—';
-    if (el('dash-pct-despesa'))   el('dash-pct-despesa').textContent   = orcDesAnual > 0 ? ((realDesAnual/orcDesAnual)*100).toFixed(1)+'%' : '—';
+    const pctRec = orcRecAnual > 0 ? Math.min((realRecAnual / orcRecAnual) * 100, 100) : 0;
+    const pctDes = orcDesAnual > 0 ? Math.min((realDesAnual / orcDesAnual) * 100, 100) : 0;
+    const desvioRec = realRecAnual - orcRecAnual;
+    const desvioDes = realDesAnual - orcDesAnual;
+    const resultOrc  = orcRecAnual - orcDesAnual;
+    const resultReal = realRecAnual - realDesAnual;
+    const resultDesvio = resultReal - resultOrc;
 
-    // Gráfico
+    const el = id => document.getElementById(id);
+    const fmv = v => formatarMoeda(Math.abs(v));
+    const sign = v => v >= 0 ? '+' : '-';
+
+    // Exercício label
+    if (el('dash-exercicio-label')) {
+        const labels = { anual:'Anual', semestral:`S${dashSubValor||1}`, trimestral:`T${dashSubValor||1}`, mensal: ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][dashSubValor||1], intervalo:'Intervalo' };
+        el('dash-exercicio-label').textContent = `${orcExercicioAtivo} — ${labels[dashPeriodo]||''}`;
+    }
+
+    // KPI receitas
+    if (el('dash-orc-receitas'))  el('dash-orc-receitas').textContent  = formatarMoeda(orcRecAnual);
+    if (el('dash-real-receitas')) el('dash-real-receitas').textContent = formatarMoeda(realRecAnual);
+    if (el('dash-bar-receita'))   el('dash-bar-receita').style.width   = pctRec.toFixed(1) + '%';
+    if (el('dash-pct-receita'))   el('dash-pct-receita').textContent   = orcRecAnual > 0 ? pctRec.toFixed(1)+'%' : '—';
+    if (el('dash-desvio-receita'))el('dash-desvio-receita').textContent= orcRecAnual > 0 ? `${sign(desvioRec)} ${fmv(desvioRec)}` : '';
+
+    // KPI despesas
+    if (el('dash-orc-despesas'))  el('dash-orc-despesas').textContent  = formatarMoeda(orcDesAnual);
+    if (el('dash-real-despesas')) el('dash-real-despesas').textContent = formatarMoeda(realDesAnual);
+    if (el('dash-bar-despesa'))   el('dash-bar-despesa').style.width   = pctDes.toFixed(1) + '%';
+    if (el('dash-pct-despesa'))   el('dash-pct-despesa').textContent   = orcDesAnual > 0 ? pctDes.toFixed(1)+'%' : '—';
+    if (el('dash-desvio-despesa'))el('dash-desvio-despesa').textContent= orcDesAnual > 0 ? `${sign(desvioDes)} ${fmv(desvioDes)}` : '';
+
+    // KPI resultado
+    if (el('dash-resultado-orc'))    el('dash-resultado-orc').textContent    = formatarMoeda(resultOrc);
+    if (el('dash-resultado-real')) {
+        el('dash-resultado-real').textContent = formatarMoeda(resultReal);
+        el('dash-resultado-real').style.color = resultReal >= 0 ? '#10b981' : '#ef4444';
+    }
+    if (el('dash-resultado-desvio')) {
+        el('dash-resultado-desvio').textContent = `${sign(resultDesvio)} ${fmv(resultDesvio)}`;
+        el('dash-resultado-desvio').style.color = resultDesvio >= 0 ? '#10b981' : '#ef4444';
+    }
+
+    // Alertas
+    if (el('dash-alertas')) {
+        const alertas = [];
+        if (orcDesAnual > 0 && (realDesAnual / orcDesAnual) > 1)
+            alertas.push({ cor:'#ef4444', txt:`Despesas ${((realDesAnual/orcDesAnual-1)*100).toFixed(1)}% acima do orçado` });
+        if (orcRecAnual > 0 && (realRecAnual / orcRecAnual) < 0.7)
+            alertas.push({ cor:'#f59e0b', txt:`Receitas em ${((realRecAnual/orcRecAnual)*100).toFixed(1)}% do orçado` });
+        if (resultReal < 0)
+            alertas.push({ cor:'#ef4444', txt:'Resultado realizado negativo' });
+        if (alertas.length === 0)
+            alertas.push({ cor:'#10b981', txt:'Execução dentro dos parâmetros' });
+        el('dash-alertas').innerHTML = alertas.map(a =>
+            `<div style="display:flex;align-items:center;gap:0.4rem;"><span style="width:8px;height:8px;border-radius:50%;background:${a.cor};flex-shrink:0;"></span><span>${a.txt}</span></div>`
+        ).join('');
+    }
+
+    // Tabela desvio por grupo
+    if (el('dash-desvio-grupos')) {
+        const grupos = appData.planoContas || [];
+        const linhas = grupos.map(g => {
+            const tipo = g.nome === 'RECEITA' ? 'RECEITA' : 'DESPESA';
+            const orc  = mesesOrc.reduce((a,m) => a + calcMesGrupo(g, m), 0);
+            // realizado do grupo: soma contas do grupo
+            const contasGrupo = (g.plano_contas || g.contas || []);
+            let real = 0;
+            contasGrupo.forEach(c => {
+                const r = realPorConta[c.id];
+                if (r) real += tipo === 'RECEITA' ? r.rec : r.des;
+            });
+            const desv = real - orc;
+            return { nome: g.nome, orc, real, desv, tipo };
+        }).filter(l => l.orc > 0 || l.real > 0);
+
+        if (linhas.length === 0) {
+            el('dash-desvio-grupos').innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">Sem dados de orçamento para o período.</p>';
+        } else {
+            el('dash-desvio-grupos').innerHTML = `
+            <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+                <thead>
+                    <tr style="background:#f1f5f9;color:#475569;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;">
+                        <th style="text-align:left;padding:0.5rem 0.75rem;font-weight:700;">Grupo</th>
+                        <th style="text-align:right;padding:0.5rem 0.75rem;font-weight:700;">Orçado</th>
+                        <th style="text-align:right;padding:0.5rem 0.75rem;font-weight:700;">Realizado</th>
+                        <th style="text-align:right;padding:0.5rem 0.75rem;font-weight:700;">Desvio</th>
+                        <th style="text-align:right;padding:0.5rem 0.75rem;font-weight:700;">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${linhas.map((l,i) => {
+                        const pct = l.orc > 0 ? ((l.real/l.orc)*100).toFixed(1) : '—';
+                        const cDesv = l.desv >= 0 ? '#10b981' : '#ef4444';
+                        return `<tr style="border-bottom:1px solid #f1f5f9;${i%2===1?'background:#fafafa':''}">
+                            <td style="padding:0.45rem 0.75rem;color:#334155;font-weight:600;">${l.nome}</td>
+                            <td style="padding:0.45rem 0.75rem;text-align:right;color:#0f172a;">${formatarMoeda(l.orc)}</td>
+                            <td style="padding:0.45rem 0.75rem;text-align:right;color:#0f172a;">${formatarMoeda(l.real)}</td>
+                            <td style="padding:0.45rem 0.75rem;text-align:right;color:${cDesv};font-weight:600;">${sign(l.desv)} ${fmv(l.desv)}</td>
+                            <td style="padding:0.45rem 0.75rem;text-align:right;color:#64748b;">${pct}${pct!=='—'?'%':''}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>`;
+        }
+    }
+
+    // Gráfico — usa colunas do período
     const ctx = document.getElementById('chart-orc-realizado');
     if (!ctx) return;
     if (chartOrcRealizado) chartOrcRealizado.destroy();
+
+    let labels, orcRec, orcDes, realRec, realDes;
+    if (dashPeriodo === 'anual' || dashPeriodo === 'intervalo') {
+        labels  = ORC_MESES_LABELS;
+        orcRec  = M.map(m => orcRecMes(m));
+        orcDes  = M.map(m => orcDesMes(m));
+        realRec = M.map(m => realRecMes[m]);
+        realDes = M.map(m => realDesMes[m]);
+    } else {
+        const ms = meses || M;
+        const nomeMes = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        labels  = ms.map(m => nomeMes[m]);
+        orcRec  = ms.map(m => orcRecMes(m));
+        orcDes  = ms.map(m => orcDesMes(m));
+        realRec = ms.map(m => realRecMes[m]);
+        realDes = ms.map(m => realDesMes[m]);
+    }
+
     chartOrcRealizado = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ORC_MESES_LABELS,
+            labels,
             datasets: [
-                {
-                    label: 'Receita Orçada',
-                    data: M.map(m => orcRecMes(m)),
-                    backgroundColor: 'rgba(34,197,94,0.3)',
-                    borderColor: 'rgba(34,197,94,1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Receita Realizada',
-                    data: M.map(m => realRecMes[m]),
-                    backgroundColor: 'rgba(34,197,94,0.8)',
-                    borderColor: 'rgba(34,197,94,1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Despesa Orçada',
-                    data: M.map(m => orcDesMes(m)),
-                    backgroundColor: 'rgba(239,68,68,0.3)',
-                    borderColor: 'rgba(239,68,68,1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Despesa Realizada',
-                    data: M.map(m => realDesMes[m]),
-                    backgroundColor: 'rgba(239,68,68,0.8)',
-                    borderColor: 'rgba(239,68,68,1)',
-                    borderWidth: 1
-                }
+                { label:'Receita Orçada',    data:orcRec,  backgroundColor:'rgba(34,197,94,0.25)', borderColor:'rgba(34,197,94,1)', borderWidth:1 },
+                { label:'Receita Realizada', data:realRec, backgroundColor:'rgba(34,197,94,0.85)', borderColor:'rgba(34,197,94,1)', borderWidth:1 },
+                { label:'Despesa Orçada',    data:orcDes,  backgroundColor:'rgba(239,68,68,0.25)', borderColor:'rgba(239,68,68,1)', borderWidth:1 },
+                { label:'Despesa Realizada', data:realDes, backgroundColor:'rgba(239,68,68,0.85)', borderColor:'rgba(239,68,68,1)', borderWidth:1 }
             ]
         },
         options: {
             responsive: true,
             plugins: { legend: { position: 'top' } },
-            scales: {
-                y: { ticks: { callback: v => 'R$ '+v.toLocaleString('pt-BR') } }
-            }
+            scales: { y: { ticks: { callback: v => 'R$ '+v.toLocaleString('pt-BR') } } }
         }
     });
+
+    // Inicializar sub-seletor
+    renderizarFiltroDashboard();
 }
 
 // ==========================================
@@ -1090,23 +1266,8 @@ function atualizarResumoExecutivo(lancamentos) {
 // 
 // FILTROS DO DASHBOARD
 // 
-function aplicarFiltrosDashboard() {
-    const dataInicio = document.getElementById('dash-filtro-data-inicio').value;
-    const dataFim = document.getElementById('dash-filtro-data-fim').value;
-
-    let lancamentosFiltrados = [...appData.lancamentos];
-
-    if (dataInicio) lancamentosFiltrados = lancamentosFiltrados.filter(l => l.data >= dataInicio);
-    if (dataFim) lancamentosFiltrados = lancamentosFiltrados.filter(l => l.data <= dataFim);
-
-    atualizarDashboardComFiltro(lancamentosFiltrados);
-}
-
-function limparFiltrosDashboard() {
-    document.getElementById('dash-filtro-data-inicio').value = '';
-    document.getElementById('dash-filtro-data-fim').value = '';
-    atualizarDashboardPremium();
-}
+function aplicarFiltrosDashboard() { atualizarDashboardPremium(); }
+function limparFiltrosDashboard() { setDashPeriodo('anual'); }
 
 function atualizarDashboardComFiltro(lancamentos) {
     let receitas = 0, despesas = 0, maiorDespesa = 0;
