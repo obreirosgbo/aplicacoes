@@ -5,7 +5,11 @@
       "PowerShell(Test-Path *)",
       "PowerShell(Get-Content *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(C:\\\\Users\\\\Herbert G *)",
+      "PowerShell(node --version 2>&1)",
+      "PowerShell($scriptPath = \"C:\\\\Users\\\\Herbert G L J\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\5.1.0\\\\skills\\\\brainstorming\\\\scripts\\\\start-server.sh\")",
+      "PowerShell($projectDir = \"C:\\\\Users\\\\Herbert G L J\\\\Desktop\\\\Projetos HTML\\\\Projeto Leonardo\")"
     ]
   }
 }
