@@ -65,13 +65,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Carrega dados e configura formulários
     carregarDados();
-    configurarFormularios();
+    document.getElementById('form-lancamento').addEventListener('submit', salvarLancamento);
+    document.getElementById('form-evento').addEventListener('submit', salvarEvento);
 
-    renderizarTipificacoes();
     renderizarIrmaos();
     atualizarSelectTipificacoes();
     renderizarLancamentos();
-    renderizarHistorico();
     atualizarDashboardPremium();
     renderizarEventos();
     inicializarControle();
@@ -97,53 +96,14 @@ function configurarNavegacao() {
             
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.getElementById(pageId).classList.add('active');
-            
+
             title.textContent = link.textContent.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|\p{Emoji_Presentation}/gu, '').trim();
+
+            if (pageId === 'historico') carregarEExibirHistorico();
         });
     });
 }
 
-function configurarFormularios() {
-    document.getElementById('form-tipificacao').addEventListener('submit', salvarTipificacao);
-    document.getElementById('form-lancamento').addEventListener('submit', salvarLancamento);
-    document.getElementById('form-evento').addEventListener('submit', salvarEvento);
-}
-
-// ==========================================
-// MÓDULO: CONFIGURAÇÕES (Categorias)
-// ==========================================
-function renderizarTipificacoes() {
-    const tbody = document.getElementById('tipificacoes-body');
-    tbody.innerHTML = appData.tipificacoes.map(t => `
-        <tr>
-            <td>${t.nome}</td>
-            <td>
-                <button class="btn-icon" onclick="excluirTipificacao(${t.id})" title="Excluir">🗑️</button>
-            </td>
-        </tr>
-    `).join('');
-    atualizarSelectTipificacoes();
-    atualizarSelectTipificacoesFiltro();
-}
-
-function salvarTipificacao(e) {
-    e.preventDefault();
-    const nomeInput = document.getElementById('nova-tipificacao').value.trim();
-    const novoId = appData.tipificacoes.length > 0 ? Math.max(...appData.tipificacoes.map(t => t.id)) + 1 : 1;
-    
-    appData.tipificacoes.push({ id: novoId, nome: nomeInput });
-    document.getElementById('form-tipificacao').reset();
-    renderizarTipificacoes();
-    salvarDados();
-}
-
-function excluirTipificacao(id) {
-    if (confirm('Tem certeza que deseja excluir esta Categoria?')) {
-        appData.tipificacoes = appData.tipificacoes.filter(t => t.id !== id);
-        renderizarTipificacoes();
-        salvarDados();
-    }
-}
 
 function atualizarSelectTipificacoes() {
     // Evento usa tipificações antigas
@@ -223,10 +183,10 @@ function salvarLancamento(e) {
     if (id) {
         const index = appData.lancamentos.findIndex(l => l.id == id);
         appData.lancamentos[index] = { ...dados, id: parseInt(id) };
-        registrarHistorico('EDIÇÃO', `${dados.tipo} | R$ ${dados.valor.toFixed(2)} | ${dados.historico}`);
+        registrarHistorico('EDIÇÃO', `${dados.tipo} | R$ ${dados.valor.toFixed(2)} | ${dados.historico}`, 'Lançamentos');
     } else {
         appData.lancamentos.push({ ...dados, id: Date.now() });
-        registrarHistorico('INSERÇÃO', `${dados.tipo} | R$ ${dados.valor.toFixed(2)} | ${dados.historico}`);
+        registrarHistorico('INSERÇÃO', `${dados.tipo} | R$ ${dados.valor.toFixed(2)} | ${dados.historico}`, 'Lançamentos');
     }
 
     fecharModalLancamento();
@@ -250,7 +210,7 @@ function excluirLancamento(id) {
             ev.lancamentosVinculados = ev.lancamentosVinculados.filter(vId => vId !== id);
         });
 
-        registrarHistorico('EXCLUSÃO', `${lanc.tipo} | R$ ${lanc.valor.toFixed(2)} | ${lanc.historico}`);
+        registrarHistorico('EXCLUSÃO', `${lanc.tipo} | R$ ${lanc.valor.toFixed(2)} | ${lanc.historico}`, 'Lançamentos');
         renderizarLancamentos();
         atualizarDashboardPremium();
         aplicarFiltrosControle();
@@ -356,10 +316,10 @@ function salvarEvento(e) {
     if (id) {
         const index = appData.eventos.findIndex(ev => ev.id == id);
         appData.eventos[index] = { ...dados, id: parseInt(id) };
-        registrarHistorico('EDIÇÃO', `Evento: ${dados.nome}`);
+        registrarHistorico('EDIÇÃO', `Evento: ${dados.nome}`, 'Prestação de Contas');
     } else {
         appData.eventos.push({ ...dados, id: Date.now() });
-        registrarHistorico('INSERÇÃO', `Evento: ${dados.nome}`);
+        registrarHistorico('INSERÇÃO', `Evento: ${dados.nome}`, 'Prestação de Contas');
     }
 
     fecharModalEvento();
@@ -371,7 +331,7 @@ function excluirEvento(id) {
     if (confirm('Excluir este evento de prestação de contas? Os lançamentos não serão apagados, apenas desvinculados.')) {
         const ev = appData.eventos.find(e => e.id === id);
         appData.eventos = appData.eventos.filter(e => e.id !== id);
-        registrarHistorico('EXCLUSÃO', `Evento: ${ev.nome}`);
+        registrarHistorico('EXCLUSÃO', `Evento: ${ev.nome}`, 'Prestação de Contas');
         renderizarEventos();
         salvarDados();
     }
@@ -576,8 +536,9 @@ function atualizarDashboardPremium() {
 
 function renderizarGraficoDashboard(receitas, despesas) {
     const ctx = document.getElementById('chart-receita-despesa');
+    if (!ctx) return;
     if (graficoDashboard) graficoDashboard.destroy();
-    
+
     graficoDashboard = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -780,36 +741,89 @@ function imprimirRelatorio() {
 // ==========================================
 // MÓDULO: HISTÓRICO DE AUDITORIA
 // ==========================================
-function registrarHistorico(acao, detalhes) {
-    const usuario = typeof obterUsuarioAtual === 'function' ? (obterUsuarioAtual()?.nome || 'Administrador') : 'Administrador';
-    const dataHora = new Date().toLocaleString('pt-BR');
-    
-    appData.historico.unshift({ dataHora, acao, detalhes, usuario });
-    renderizarHistorico();
+async function registrarHistorico(acao, detalhes, modulo = 'Geral') {
+    const perfil = typeof obterPerfilAtual === 'function' ? obterPerfilAtual() : null;
+    const usuario_nome = perfil?.nome || 'Administrador';
+    const usuario_id   = perfil?.id   || null;
+
+    await supabaseClient.from('historico_auditoria').insert({
+        modulo, acao, detalhes, usuario_nome, usuario_id
+    });
 }
 
-function renderizarHistorico() {
+async function limparHistorico() {
+    if (!confirm('Deseja apagar todo o histórico? Esta ação não pode ser desfeita.')) return;
+    const { error } = await supabaseClient.from('historico_auditoria').delete().neq('id', 0);
+    if (error) { alert('Erro ao limpar histórico: ' + error.message); return; }
+    await carregarEExibirHistorico();
+}
+
+async function carregarEExibirHistorico() {
     const tbody = document.getElementById('historico-body');
     if (!tbody) return;
 
-    if (appData.historico.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding: 2rem;">Nenhum registro no histórico.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="5" style="padding:2rem; text-align:center; color:#94a3b8;">Carregando...</td></tr>`;
+
+    const filtroModulo = document.getElementById('hist-filtro-modulo')?.value || '';
+    const filtroAcao   = document.getElementById('hist-filtro-acao')?.value   || '';
+
+    let query = supabaseClient
+        .from('historico_auditoria')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+    if (filtroModulo) query = query.eq('modulo', filtroModulo);
+    if (filtroAcao)   query = query.eq('acao', filtroAcao);
+
+    const { data, error } = await query;
+    if (error) {
+        tbody.innerHTML = `<tr><td colspan="5" style="padding:2rem; text-align:center; color:#dc2626;">Erro ao carregar histórico: ${error.message}</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = appData.historico.map(h => {
-        let badgeClass = 'badge-acao-inserir';
-        if (h.acao === 'EDIÇÃO') badgeClass = 'badge-acao-editar';
-        if (h.acao === 'EXCLUSÃO') badgeClass = 'badge-acao-excluir';
+    renderizarHistorico(data || []);
+}
 
-        return `
-        <tr>
-            <td>${h.dataHora}</td>
-            <td><span class="badge ${badgeClass}">${h.acao}</span></td>
-            <td>${h.detalhes}</td>
-            <td>👤 ${h.usuario}</td>
-        </tr>
-    `}).join('');
+function renderizarHistorico(lista) {
+    const tbody = document.getElementById('historico-body');
+    if (!tbody) return;
+
+    if (!lista || lista.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding:2rem;">Nenhum registro encontrado.</td></tr>`;
+        return;
+    }
+
+    const badgeStyles = {
+        'INSERÇÃO':  'background:#dcfce7; color:#16a34a;',
+        'EDIÇÃO':    'background:#fef9c3; color:#ca8a04;',
+        'EXCLUSÃO':  'background:#fee2e2; color:#dc2626;',
+        'IMPORTAÇÃO':'background:#dbeafe; color:#2563eb;',
+        'ENVIO':     'background:#f3e8ff; color:#7c3aed;',
+        'ACESSO':    'background:#f1f5f9; color:#475569;',
+    };
+    const moduloIcons = {
+        'Lançamentos':        '💰',
+        'Orçamento':          '📊',
+        'Plano de Contas':    '📋',
+        'Prestação de Contas':'📄',
+        'Irmãos':             '👥',
+        'Acessos':            '🔑',
+        'Geral':              '⚙️',
+    };
+
+    tbody.innerHTML = lista.map(h => {
+        const st   = badgeStyles[h.acao] || 'background:#f1f5f9; color:#475569;';
+        const icon = moduloIcons[h.modulo] || '•';
+        const dataHora = new Date(h.created_at).toLocaleString('pt-BR');
+        return `<tr>
+            <td style="white-space:nowrap; font-size:0.82rem; color:#64748b;">${dataHora}</td>
+            <td style="white-space:nowrap; font-size:0.83rem;">${icon} ${h.modulo || '—'}</td>
+            <td><span style="font-size:0.75rem; font-weight:600; padding:0.15rem 0.55rem; border-radius:999px; ${st}">${h.acao}</span></td>
+            <td style="font-size:0.85rem;">${h.detalhes}</td>
+            <td style="white-space:nowrap; font-size:0.82rem; color:#64748b;">👤 ${h.usuario_nome}</td>
+        </tr>`;
+    }).join('');
 }
 
 // ==========================================
@@ -1382,8 +1396,11 @@ function renderizarGraficosAdicionaisDashboardComFiltro(lancamentos) {
 }
 
 function atualizarResumoExecutivoComFiltro(lancamentos) {
-    const dataInicio = document.getElementById('dash-filtro-data-inicio').value;
-    const dataFim = document.getElementById('dash-filtro-data-fim').value;
+    const elInicio = document.getElementById('dash-filtro-data-inicio');
+    const elFim = document.getElementById('dash-filtro-data-fim');
+    if (!elInicio || !elFim) return;
+    const dataInicio = elInicio.value;
+    const dataFim = elFim.value;
     
     let periodo = 'Período Customizado';
     if (dataInicio && dataFim) {
@@ -1874,11 +1891,11 @@ document.getElementById('form-irmao').addEventListener('submit', function(e) {
     if (id) {
         const index = appData.irmaos.findIndex(i => i.id == id);
         appData.irmaos[index] = { ...dados, id: parseInt(id) };
-        registrarHistorico('EDIÇÃO', `Irmão: ${dados.nome}`);
+        registrarHistorico('EDIÇÃO', `Irmão: ${dados.nome}`, 'Irmãos');
     } else {
         const novoId = appData.irmaos.length > 0 ? Math.max(...appData.irmaos.map(i => i.id)) + 1 : 1;
         appData.irmaos.push({ ...dados, id: novoId });
-        registrarHistorico('INSERÇÃO', `Irmão: ${dados.nome}`);
+        registrarHistorico('INSERÇÃO', `Irmão: ${dados.nome}`, 'Irmãos');
     }
 
     fecharModalIrmao();
@@ -1890,7 +1907,7 @@ function excluirIrmao(id) {
     if (confirm('Tem certeza que deseja excluir este irmão?')) {
         const irmao = appData.irmaos.find(i => i.id === id);
         appData.irmaos = appData.irmaos.filter(i => i.id !== id);
-        registrarHistorico('EXCLUSÃO', `Irmão: ${irmao.nome}`);
+        registrarHistorico('EXCLUSÃO', `Irmão: ${irmao.nome}`, 'Irmãos');
         renderizarIrmaos();
         salvarDados();
     }
@@ -1963,7 +1980,7 @@ function enviarPrestacaoSelecionados() {
     alert(mensagem);
     
     // Registrar no histórico
-    registrarHistorico('ENVIO', `Prestação de Contas enviada para ${irmaosParaEnviar.length} irmão(s)`);
+    registrarHistorico('ENVIO', `Prestação de Contas enviada para ${irmaosParaEnviar.length} irmão(s)`, 'Prestação de Contas');
     
     fecharModalEnviarPrestacao();
     fecharModalRelatorioPrestacao();
@@ -2058,7 +2075,7 @@ async function atualizarAcesso(userId, novoStatus) {
         }
         await supabaseUpdateProfileStatus(userId, novoStatus);
         await carregarControleAcessos();
-        registrarHistorico('ACESSO', `Acesso ${novoStatus} para usuário ID ${userId}`);
+        registrarHistorico('ACESSO', `Acesso ${novoStatus} para usuário ID ${userId}`, 'Acessos');
     } catch (erro) {
         alert('Erro ao atualizar acesso: ' + erro.message);
     }
@@ -2074,7 +2091,7 @@ async function salvarPerfil(userId) {
     try {
         await supabaseUpdateProfileRole(userId, role);
         await carregarControleAcessos();
-        registrarHistorico('ACESSO', `Perfil alterado para ${role} — usuário ID ${userId}`);
+        registrarHistorico('ACESSO', `Perfil alterado para ${role} — usuário ID ${userId}`, 'Acessos');
     } catch (erro) {
         alert('Erro ao atualizar perfil: ' + erro.message);
     }
@@ -2151,7 +2168,7 @@ function importarIrmaosExcel(inputEl) {
 
             salvarDados();
             renderizarIrmaos();
-            registrarHistorico('IMPORTAÇÃO', `${importados} irmão(s) importado(s) via Excel`);
+            registrarHistorico('IMPORTAÇÃO', `${importados} irmão(s) importado(s) via Excel`, 'Irmãos');
             alert(`✅ ${importados} irmão(s) importado(s) com sucesso!\n${ignorados > 0 ? `⚠️ ${ignorados} linha(s) ignorada(s) (email inválido ou duplicado).` : ''}`);
 
         } catch (erro) {
@@ -2162,6 +2179,43 @@ function importarIrmaosExcel(inputEl) {
     };
     reader.readAsArrayBuffer(arquivo);
 }
+function baixarModeloLancamentos() {
+    // Monta lista de contas do plano para a aba de referência
+    const contasReceita = [];
+    const contasDespesa = [];
+    (appData.planoContas || []).forEach(grupo => {
+        (grupo.contas || []).forEach(c => {
+            if (grupo.nome === 'RECEITA') contasReceita.push(c.nome);
+            else contasDespesa.push(c.nome);
+        });
+    });
+
+    // Aba principal — modelo com exemplos
+    const modelo = [
+        { tipo: 'RECEITA', conta: contasReceita[0] || 'Nome da Conta', data: '2026-01-15', historico: 'Mensalidades Janeiro', descricao: 'Descrição detalhada (opcional)', valor: 1500.00 },
+        { tipo: 'DESPESA', conta: contasDespesa[0] || 'Nome da Conta', data: '2026-01-20', historico: 'Aluguel Sede', descricao: '', valor: 800.00 },
+    ];
+
+    // Aba de referência — lista de contas válidas
+    const ref = [
+        { tipo: 'RECEITA', contas_validas: contasReceita.join(', ') || '(nenhuma conta cadastrada)' },
+        { tipo: 'DESPESA', contas_validas: contasDespesa.join(', ') || '(nenhuma conta cadastrada)' },
+    ];
+
+    const wb = XLSX.utils.book_new();
+
+    const wsModelo = XLSX.utils.json_to_sheet(modelo);
+    // Largura das colunas
+    wsModelo['!cols'] = [{ wch: 10 }, { wch: 30 }, { wch: 12 }, { wch: 30 }, { wch: 40 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsModelo, 'Lançamentos');
+
+    const wsRef = XLSX.utils.json_to_sheet(ref);
+    wsRef['!cols'] = [{ wch: 10 }, { wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, wsRef, 'Contas Válidas');
+
+    XLSX.writeFile(wb, 'modelo_lancamentos.xlsx');
+}
+
 function importarLancamentosExcel(inputEl) {
     const arquivo = inputEl.files[0];
     if (!arquivo) return;
@@ -2175,17 +2229,23 @@ function importarLancamentosExcel(inputEl) {
             const linhas = XLSX.utils.sheet_to_json(sheet, { raw: false });
 
             if (!linhas.length) {
-                alert('Planilha vazia ou formato nao reconhecido.');
+                alert('Planilha vazia ou formato não reconhecido.');
                 return;
             }
 
             const normalizar = obj => {
                 const n = {};
-                for (const k in obj) n[k.toLowerCase().trim()] = obj[k];
+                for (const k in obj) n[k.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '')] = (obj[k] || '').toString().trim();
                 return n;
             };
 
-            const tipificacoesValidas = new Set((appData.tipificacoes || []).map(t => t.nome.toLowerCase()));
+            // Monta mapa de contas válidas: nome (lower) -> nome original
+            const contasValidas = new Map();
+            (appData.planoContas || []).forEach(grupo => {
+                (grupo.contas || []).forEach(c => {
+                    contasValidas.set(c.nome.toLowerCase(), c.nome);
+                });
+            });
 
             let importados = 0;
             let ignorados = 0;
@@ -2198,48 +2258,57 @@ function importarLancamentosExcel(inputEl) {
 
             linhas.forEach((linha, idx) => {
                 const l = normalizar(linha);
+                const rowNum = idx + 2;
 
-                const dataRaw = (l['data'] || '').toString().trim();
-                const tipoRaw = (l['tipo'] || '').toString().trim().toUpperCase();
-                const categoriaRaw = (l['categoria'] || l['tipificacao'] || '').toString().trim();
-                const historico = (l['historico'] || '').toString().trim();
-                const descricao = (l['descricao'] || '').toString().trim();
-                const valorRaw = (l['valor'] || '').toString().replace(',', '.').trim();
+                const dataRaw   = l['data']      || '';
+                const tipoRaw   = (l['tipo']     || '').toUpperCase();
+                // aceita coluna "conta" (novo modelo) ou "tipificacao"/"categoria" (legado)
+                const contaRaw  = l['conta']     || l['tipificacao'] || l['categoria'] || '';
+                const historico = l['historico'] || '';
+                const descricao = l['descricao'] || '';
+                const valorRaw  = (l['valor']    || '').replace(',', '.');
 
-                if (!dataRaw) { ignorados++; erros.push('Linha ' + (idx + 2) + ': data ausente'); return; }
+                if (!dataRaw)   { ignorados++; erros.push(`Linha ${rowNum}: data ausente`); return; }
+                if (!historico) { ignorados++; erros.push(`Linha ${rowNum}: histórico ausente`); return; }
                 if (tipoRaw !== 'RECEITA' && tipoRaw !== 'DESPESA') {
                     ignorados++;
-                    erros.push('Linha ' + (idx + 2) + ': tipo invalido ("' + tipoRaw + '") - use RECEITA ou DESPESA');
+                    erros.push(`Linha ${rowNum}: tipo inválido ("${tipoRaw}") — use RECEITA ou DESPESA`);
                     return;
                 }
 
                 const valor = parseFloat(valorRaw);
                 if (isNaN(valor) || valor <= 0) {
                     ignorados++;
-                    erros.push('Linha ' + (idx + 2) + ': valor invalido ("' + valorRaw + '")');
+                    erros.push(`Linha ${rowNum}: valor inválido ("${valorRaw}")`);
                     return;
                 }
 
-                if (categoriaRaw && !tipificacoesValidas.has(categoriaRaw.toLowerCase())) {
-                    ignorados++;
-                    erros.push('Linha ' + (idx + 2) + ': categoria "' + categoriaRaw + '" nao encontrada nas tipificacoes');
-                    return;
+                let tipificacao = '';
+                if (contaRaw) {
+                    const nomeValido = contasValidas.get(contaRaw.toLowerCase());
+                    if (!nomeValido) {
+                        ignorados++;
+                        erros.push(`Linha ${rowNum}: conta "${contaRaw}" não encontrada no plano de contas`);
+                        return;
+                    }
+                    tipificacao = nomeValido;
                 }
 
-                appData.lancamentos.push({ id: idAtual++, data: dataRaw, tipo: tipoRaw, categoria: categoriaRaw, historico, descricao, valor });
+                appData.lancamentos.push({ id: idAtual++, data: dataRaw, tipo: tipoRaw, tipificacao, historico, descricao, valor });
                 importados++;
             });
 
             if (importados > 0) {
                 salvarDados();
                 renderizarLancamentos();
-                registrarHistorico('IMPORTACAO', importados + ' lancamento(s) importado(s) via Excel');
+                atualizarDashboardPremium();
+                registrarHistorico('IMPORTAÇÃO', `${importados} lançamento(s) importado(s) via Excel`, 'Lançamentos');
             }
 
-            let msg = importados + ' lancamento(s) importado(s) com sucesso!';
+            let msg = `${importados} lançamento(s) importado(s) com sucesso!`;
             if (ignorados > 0) {
-                msg += '\n' + ignorados + ' linha(s) ignorada(s):\n' + erros.slice(0, 5).join('\n');
-                if (erros.length > 5) msg += '\n... e mais ' + (erros.length - 5) + ' erros.';
+                msg += `\n${ignorados} linha(s) ignorada(s):\n` + erros.slice(0, 5).join('\n');
+                if (erros.length > 5) msg += `\n... e mais ${erros.length - 5} erros.`;
             }
             alert(msg);
 
@@ -2316,45 +2385,74 @@ function renderizarPlanoContas() {
 
         if (gruposDeTipo.length === 0) return '';
 
-        const cor = tipo === 'RECEITA' ? 'receita' : 'despesa';
-        const bgHeader = tipo === 'RECEITA' ? '#e8f5e9' : '#fdecea';
-        const borderColor = tipo === 'RECEITA' ? '#4caf50' : '#f44336';
+        const isReceita = tipo === 'RECEITA';
+        const accent     = isReceita ? '#16a34a' : '#dc2626';
+        const accentLight= isReceita ? '#dcfce7' : '#fee2e2';
+        const accentMid  = isReceita ? '#bbf7d0' : '#fecaca';
+        const icon       = isReceita ? '↑' : '↓';
+        const totalContas = gruposDeTipo.reduce((acc, g) => acc + (g.contas || []).length, 0);
 
-        const gruposHTML = gruposDeTipo.map(grupo => `
-            <div style="margin-bottom: 1.5rem; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;">
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; background: #f8fafc;">
-                    <strong style="font-size: 0.95rem;">${grupo.descricao || grupo.nome}</strong>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn-icon" onclick="abrirModalGrupoContas(${grupo._idx})" title="Editar">✏️</button>
-                        <button class="btn-icon" onclick="excluirGrupoContas(${grupo._idx})" title="Excluir">🗑️</button>
+        const gruposHTML = gruposDeTipo.map(grupo => {
+            const contas = grupo.contas || [];
+            const contasHTML = contas.length === 0
+                ? `<div style="padding:0.6rem 1.25rem; font-size:0.82rem; color:#94a3b8; font-style:italic;">Nenhuma conta cadastrada.</div>`
+                : contas.map((cat, catIdx) => `
+                    <div style="display:flex; align-items:center; justify-content:space-between;
+                                padding:0.45rem 1.25rem; border-top:1px solid #f1f5f9;"
+                         onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                        <div style="display:flex; align-items:baseline; gap:0.5rem;">
+                            <span style="font-size:0.85rem; color:#1e293b;">${cat.nome}</span>
+                            ${(cat.descricoes || []).length > 0
+                                ? `<span style="font-size:0.75rem; color:#94a3b8;">${cat.descricoes.join(' · ')}</span>`
+                                : ''}
+                        </div>
+                        <button onclick="editarCategoriaContas(${grupo._idx}, ${catIdx})" title="Editar"
+                                style="background:none; border:none; cursor:pointer; color:#cbd5e1;
+                                       font-size:0.78rem; padding:0.1rem 0.3rem; border-radius:4px; flex-shrink:0;"
+                                onmouseover="this.style.color='${accent}'" onmouseout="this.style.color='#cbd5e1'">✏️</button>
                     </div>
+                `).join('');
+
+            return `
+                <div style="background:white; border:1px solid #e2e8f0; border-radius:12px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.05); overflow:hidden; width:100%;">
+                    <div style="display:flex; align-items:center; gap:1rem; padding:0.7rem 1.25rem;
+                                background:${accentLight}; border-bottom:1px solid ${accentMid};">
+                        <span style="font-size:0.9rem; font-weight:700; color:#1e293b;">${grupo.descricao || grupo.nome}</span>
+                        <span style="font-size:0.7rem; background:white; color:${accent}; font-weight:600;
+                                     padding:0.1rem 0.5rem; border-radius:999px; border:1px solid ${accentMid};">
+                            ${contas.length} ${contas.length === 1 ? 'conta' : 'contas'}
+                        </span>
+                        <div style="margin-left:auto; display:flex; gap:0.4rem;">
+                            <button onclick="abrirModalGrupoContas(${grupo._idx})" title="Editar grupo"
+                                    style="background:white; border:1px solid ${accentMid}; border-radius:6px;
+                                           padding:0.2rem 0.55rem; cursor:pointer; font-size:0.75rem; color:#475569;"
+                                    onmouseover="this.style.background='${accentMid}'" onmouseout="this.style.background='white'">✏️</button>
+                            <button onclick="excluirGrupoContas(${grupo._idx})" title="Excluir grupo"
+                                    style="background:white; border:1px solid #fecaca; border-radius:6px;
+                                           padding:0.2rem 0.55rem; cursor:pointer; font-size:0.75rem; color:#ef4444;"
+                                    onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='white'">🗑️</button>
+                        </div>
+                    </div>
+                    ${contasHTML}
                 </div>
-                <div style="padding: 0.75rem 1rem;">
-                    ${(grupo.contas || []).length === 0
-                        ? '<p class="text-muted" style="margin:0; font-size:0.85rem;">Nenhuma conta cadastrada.</p>'
-                        : (grupo.contas || []).map((cat, catIdx) => `
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 0.4rem 0; border-bottom: 1px solid #f0f0f0;">
-                                <div>
-                                    <span style="font-size: 0.9rem;">${cat.nome}</span>
-                                    ${(cat.descricoes || []).length > 0
-                                        ? `<div style="font-size:0.78rem; color: var(--color-text-muted); margin-top:0.2rem;">${cat.descricoes.join(' · ')}</div>`
-                                        : ''}
-                                </div>
-                                <button class="btn-icon" onclick="editarCategoriaContas(${grupo._idx}, ${catIdx})" title="Editar" style="flex-shrink:0; margin-left:0.5rem;">✏️</button>
-                            </div>
-                        `).join('')
-                    }
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         return `
             <div style="margin-bottom: 2.5rem;">
-                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding: 0.75rem 1rem; background: ${bgHeader}; border-left: 4px solid ${borderColor}; border-radius: 4px;">
-                    <span class="badge badge-${cor}" style="font-size: 1rem; padding: 0.3rem 1rem;">${tipo}</span>
-                    <span class="text-muted" style="font-size: 0.85rem;">${gruposDeTipo.reduce((acc, g) => acc + (g.contas || []).length, 0)} contas cadastradas</span>
+                <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+                    <div style="width:30px; height:30px; border-radius:8px; background:${accent};
+                                display:flex; align-items:center; justify-content:center;
+                                color:white; font-weight:800; font-size:1rem;">${icon}</div>
+                    <div>
+                        <h3 style="margin:0; font-size:1rem; font-weight:700; color:#1e293b;">${tipo}</h3>
+                        <span style="font-size:0.78rem; color:#94a3b8;">${gruposDeTipo.length} grupo${gruposDeTipo.length !== 1 ? 's' : ''} · ${totalContas} conta${totalContas !== 1 ? 's' : ''}</span>
+                    </div>
                 </div>
-                ${gruposHTML}
+                <div style="display:flex; flex-direction:column; gap:0.6rem;">
+                    ${gruposHTML}
+                </div>
             </div>
         `;
     }).join('');
@@ -2502,6 +2600,7 @@ async function excluirExercicio() {
 
     orcExerciciosDisponiveis = orcExerciciosDisponiveis.filter(a => a !== ano);
     const proximo = orcExerciciosDisponiveis[0];
+    registrarHistorico('EXCLUSÃO', `Exercício orçamentário ${ano} excluído`, 'Orçamento');
     await trocarExercicio(proximo);
 }
 
@@ -2572,6 +2671,7 @@ async function confirmarCopiarExercicio() {
     if (!orcExerciciosDisponiveis.includes(destino)) {
         orcExerciciosDisponiveis = [...orcExerciciosDisponiveis, destino].sort((a,b) => a - b);
     }
+    registrarHistorico('INSERÇÃO', `Exercício ${destino} criado como cópia de ${origem}`, 'Orçamento');
     await trocarExercicio(destino);
 }
 
@@ -2600,6 +2700,7 @@ async function criarExercicio() {
     if (error) { alert('Erro ao criar exercício: ' + error.message); return; }
 
     orcExerciciosDisponiveis = [...orcExerciciosDisponiveis, ano].sort((a,b) => a - b);
+    registrarHistorico('INSERÇÃO', `Exercício orçamentário ${ano} criado`, 'Orçamento');
     await trocarExercicio(ano);
 }
 
@@ -2772,37 +2873,43 @@ function renderizarPlanilha() {
     const fv = v => (v===0||!v) ? '—' : v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
     const fp = (v,b) => (!b||b===0) ? '—' : ((v/b)*100).toFixed(2)+'%';
 
-    const S = {
-        th: 'padding:0.5rem 0.4rem; border:1px solid #475569; text-align:right; font-size:0.78rem;',
-        n1: 'background:#1e293b; color:white; font-weight:700; padding:0.5rem 0.4rem; text-align:right; border:1px solid #334155; font-size:0.78rem;',
-        n1d: 'background:#1e293b; color:white; font-weight:700; padding:0.5rem 0.75rem; border:1px solid #334155; white-space:nowrap; font-size:0.78rem;',
-        n2: 'background:#e2e8f0; font-weight:700; padding:0.4rem 0.4rem; text-align:right; border:1px solid #cbd5e1; font-size:0.78rem;',
-        n2d: 'background:#e2e8f0; font-weight:700; padding:0.4rem 1rem; border:1px solid #cbd5e1; white-space:nowrap; font-size:0.78rem;',
-        n3: 'background:white; padding:0.3rem 0.4rem; text-align:right; border:1px solid #e2e8f0; font-size:0.78rem;',
-        n3d: 'background:white; padding:0.3rem 1.5rem; border:1px solid #e2e8f0; white-space:nowrap; font-size:0.78rem;',
-        fc: 'background:#eff6ff; padding:0.3rem 0.4rem; text-align:right; border:1px solid #bfdbfe; font-size:0.78rem;',
-        inp: 'width:100%;border:none;text-align:right;padding:0.2rem;font-size:0.78rem;background:transparent;',
-        cellinp: 'padding:0.1rem; border:1px solid #e2e8f0;',
-    };
-
     const colunas = orcColunas();
     const isMensal = orcPeriodo === 'mensal';
-    const nCols = colunas.length;
+
+    // No modo mensal omitimos Média e % para caber as 12 colunas na tela
+    const fs   = isMensal ? '0.7rem'  : '0.78rem';
+    const pad  = isMensal ? '0.25rem 0.2rem' : '0.5rem 0.4rem';
+    const padD = isMensal ? '0.25rem 0.4rem' : '0.5rem 0.75rem';
+
+    const S = {
+        th:   `padding:${pad}; border:1px solid #475569; text-align:right; font-size:${fs};`,
+        n1:   `background:#1e293b; color:white; font-weight:700; padding:${pad}; text-align:right; border:1px solid #334155; font-size:${fs};`,
+        n1d:  `background:#1e293b; color:white; font-weight:700; padding:${padD}; border:1px solid #334155; font-size:${fs}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:0;`,
+        n2:   `background:#e2e8f0; font-weight:700; padding:${pad}; text-align:right; border:1px solid #cbd5e1; font-size:${fs};`,
+        n2d:  `background:#e2e8f0; font-weight:700; padding:${padD}; border:1px solid #cbd5e1; font-size:${fs}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:0;`,
+        n3:   `background:white; padding:${pad}; text-align:right; border:1px solid #e2e8f0; font-size:${fs};`,
+        n3d:  `background:white; padding:${padD}; border:1px solid #e2e8f0; font-size:${fs}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:0;`,
+        fc:   `background:#eff6ff; padding:${pad}; text-align:right; border:1px solid #bfdbfe; font-size:${fs};`,
+        inp:  `width:100%;border:none;text-align:right;padding:0.1rem;font-size:${fs};background:transparent;`,
+        cellinp: `padding:0.05rem; border:1px solid #e2e8f0;`,
+    };
 
     const getColVal = (getFn, col) => somarColuna(getFn, col.meses);
 
+    const extraCols = isMensal ? '' : `<td style="${S.n1}">${fv(anual/12)}</td><td style="${S.n1}">${fp(anual,totRecAnual)}</td>`;
+    const extraColsN2 = (anual) => isMensal ? '' : `<td style="${S.n2}">${fv(anual/12)}</td><td style="${S.n2}">${fp(anual,totRecAnual)}</td>`;
+    const extraColsN3 = (anual, isFormula) => isMensal ? '' : `<td style="${isFormula?S.fc:S.n3}">${fv(anual/12)}</td><td style="${isFormula?S.fc:S.n3}">${fp(anual,totRecAnual)}</td>`;
+
     const rowN1 = (cod, label, getMes, anual) => `<tr>
         <td style="${S.n1d}">${cod}  ${label}</td>
-        <td style="${S.n1}">${fv(anual/12)}</td>
-        <td style="${S.n1}">${fp(anual,totRecAnual)}</td>
+        ${isMensal ? '' : `<td style="${S.n1}">${fv(anual/12)}</td><td style="${S.n1}">${fp(anual,totRecAnual)}</td>`}
         ${colunas.map(col=>`<td style="${S.n1}">${fv(getColVal(getMes,col))}</td>`).join('')}
         <td style="${S.n1}">${fv(anual)}</td>
     </tr>`;
 
     const rowN2 = (cod, label, getMes, anual) => `<tr>
         <td style="${S.n2d}">${cod}  ${label}</td>
-        <td style="${S.n2}">${fv(anual/12)}</td>
-        <td style="${S.n2}">${fp(anual,totRecAnual)}</td>
+        ${extraColsN2(anual)}
         ${colunas.map(col=>`<td style="${S.n2}">${fv(getColVal(getMes,col))}</td>`).join('')}
         <td style="${S.n2}">${fv(anual)}</td>
     </tr>`;
@@ -2811,8 +2918,7 @@ function renderizarPlanilha() {
         const anual = calcAnualConta(conta.id);
         return `<tr>
             <td style="${S.n3d}">${conta.nome}</td>
-            <td style="${isFormula?S.fc:S.n3}">${fv(anual/12)}</td>
-            <td style="${isFormula?S.fc:S.n3}">${fp(anual,totRecAnual)}</td>
+            ${extraColsN3(anual, isFormula)}
             ${colunas.map(col => {
                 const soma = somarColuna(m => getValorConta(conta.id, m), col.meses);
                 if (isFormula) return `<td style="${S.fc}">${fv(soma)}</td>`;
@@ -2829,28 +2935,41 @@ function renderizarPlanilha() {
 
     const rowResultado = () => {
         const cor = resAnual >= 0 ? '#16a34a' : '#dc2626';
-        const st = `background:#0f172a; color:${cor}; font-weight:700; padding:0.5rem 0.4rem; text-align:right; border:1px solid #1e293b; font-size:0.78rem;`;
+        const st = `background:#0f172a; color:${cor}; font-weight:700; padding:${pad}; text-align:right; border:1px solid #1e293b; font-size:${fs};`;
         return `<tr>
-            <td style="background:#0f172a;color:${cor};font-weight:700;padding:0.5rem 0.75rem;border:1px solid #1e293b;white-space:nowrap;font-size:0.78rem;">RESULTADO FINAL</td>
-            <td style="${st}">${fv(resAnual/12)}</td>
-            <td style="${st}">${fp(resAnual,totRecAnual)}</td>
+            <td style="background:#0f172a;color:${cor};font-weight:700;padding:${padD};border:1px solid #1e293b;font-size:${fs};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:0;">RESULTADO FINAL</td>
+            ${isMensal ? '' : `<td style="${st}">${fv(resAnual/12)}</td><td style="${st}">${fp(resAnual,totRecAnual)}</td>`}
             ${colunas.map(col=>{const v=somarColuna(resMes,col.meses);const c=v>=0?'#16a34a':'#dc2626';
-                return `<td style="background:#0f172a;color:${c};font-weight:700;padding:0.5rem 0.4rem;text-align:right;border:1px solid #1e293b;font-size:0.78rem;">${fv(v)}</td>`;
+                return `<td style="background:#0f172a;color:${c};font-weight:700;padding:${pad};text-align:right;border:1px solid #1e293b;font-size:${fs};">${fv(v)}</td>`;
             }).join('')}
-            <td style="background:#0f172a;color:${cor};font-weight:700;padding:0.5rem 0.4rem;text-align:right;border:1px solid #1e293b;font-size:0.78rem;">${fv(resAnual)}</td>
+            <td style="${st}">${fv(resAnual)}</td>
         </tr>`;
     };
 
+    // No mensal: tabela fixa de 100% sem overflow para caber tudo na tela
+    const tableStyle = isMensal
+        ? 'border-collapse:collapse; width:100%; table-layout:fixed;'
+        : 'border-collapse:collapse; min-width:800px; width:100%;';
+    const wrapStyle = isMensal ? '' : 'overflow-x:auto;';
+
+    // Larguras das colunas no modo mensal: descrição ~22%, total ~8%, 12 meses dividem o resto
+    const colWidths = isMensal ? `
+        <colgroup>
+            <col style="width:22%">
+            ${colunas.map(()=>`<col style="width:${(70/12).toFixed(2)}%">`).join('')}
+            <col style="width:8%">
+        </colgroup>` : '';
+
     container.innerHTML = `
         <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Projeção de Receitas e Despesas — ${orcExercicioAtivo}</p>
-        <div style="overflow-x:auto;">
-        <table style="border-collapse:collapse; min-width:800px; width:100%;">
+        <div style="${wrapStyle}">
+        <table style="${tableStyle}">
+            ${colWidths}
             <thead><tr style="background:#334155; color:white;">
-                <th style="text-align:left;${S.th} min-width:260px; position:sticky; left:0; z-index:2; background:#334155;">Descrição</th>
-                <th style="${S.th} min-width:90px;">Média Mensal</th>
-                <th style="${S.th} min-width:60px;">%</th>
-                ${colunas.map(c=>`<th style="${S.th} min-width:90px;">${c.label}</th>`).join('')}
-                <th style="${S.th} min-width:90px;">Total</th>
+                <th style="text-align:left;${S.th}">Descrição</th>
+                ${isMensal ? '' : `<th style="${S.th}">Média Mensal</th><th style="${S.th}">%</th>`}
+                ${colunas.map(c=>`<th style="${S.th}">${c.label}</th>`).join('')}
+                <th style="${S.th}">Total</th>
             </tr></thead>
             <tbody>
                 ${rowN1('1','TOTAL DAS RECEITAS', totRecMes, totRecAnual)}
@@ -2950,11 +3069,11 @@ document.getElementById('form-grupo-contas').addEventListener('submit', function
 
     if (idx !== '') {
         appData.planoContas[parseInt(idx)] = { ...appData.planoContas[parseInt(idx)], ...dados };
-        registrarHistorico('EDIÇÃO', `Plano de Contas: ${nome}`);
+        registrarHistorico('EDIÇÃO', `Grupo: ${nome}`, 'Plano de Contas');
     } else {
         const novoId = Math.max(...appData.planoContas.map(p => p.id), 0) + 1;
         appData.planoContas.push({ id: novoId, ...dados });
-        registrarHistorico('INSERÇÃO', `Plano de Contas: ${nome}`);
+        registrarHistorico('INSERÇÃO', `Grupo: ${nome}`, 'Plano de Contas');
     }
 
     fecharModalGrupoContas();
@@ -2966,7 +3085,7 @@ document.getElementById('form-grupo-contas').addEventListener('submit', function
 function excluirGrupoContas(idx) {
     if (confirm('Tem certeza que deseja excluir este grupo?')) {
         appData.planoContas.splice(idx, 1);
-        registrarHistorico('EXCLUSÃO', `Grupo de Contas removido`);
+        registrarHistorico('EXCLUSÃO', `Grupo de Contas removido`, 'Plano de Contas');
         renderizarPlanoContas();
         renderizarOrcamentos();
         salvarDados();
@@ -3018,7 +3137,7 @@ document.getElementById('form-categoria-contas').addEventListener('submit', func
     if (!appData.planoContas[grupoIdx].contas) appData.planoContas[grupoIdx].contas = appData.planoContas[grupoIdx].categorias || [];
     appData.planoContas[grupoIdx].contas[catIdx] = { nome, descricoes };
 
-    registrarHistorico('EDIÇÃO', `Categoria: ${nome}`);
+    registrarHistorico('EDIÇÃO', `Conta: ${nome}`, 'Plano de Contas');
     fecharModalCategoriaContas();
     renderizarPlanoContas();
     renderizarOrcamentos();

@@ -99,12 +99,16 @@ CREATE TABLE IF NOT EXISTS orcamentos (
 -- Histórico de auditoria
 CREATE TABLE IF NOT EXISTS historico_auditoria (
     id          BIGSERIAL PRIMARY KEY,
+    modulo      TEXT,
     acao        TEXT NOT NULL,
     detalhes    TEXT,
     usuario_id  UUID REFERENCES profiles(id) ON DELETE SET NULL,
     usuario_nome TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migração: adicionar coluna modulo caso a tabela já exista
+ALTER TABLE historico_auditoria ADD COLUMN IF NOT EXISTS modulo TEXT;
 
 -- ============================================================
 -- ROW LEVEL SECURITY (RLS)

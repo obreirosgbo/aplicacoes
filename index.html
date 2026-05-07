@@ -27,7 +27,6 @@
                 <a href="#irmãos" class="nav-link" data-page="irmãos">👥 Irmãos</a>
                 <a href="#orcamento" class="nav-link" data-page="orcamento">💵 Orçamento</a>
                 <a href="#plano-contas" class="nav-link" data-page="plano-contas">📊 Plano de Contas</a>
-                <a href="#configuracoes" class="nav-link" data-page="configuracoes">⚙️ Configurações</a>
                 <a href="#controle-acessos" class="nav-link" data-page="controle-acessos">🔑 Controle de Acessos <span id="badge-pendentes" class="badge-pendentes" style="display:none;"></span></a>
             </nav>
 
@@ -245,6 +244,7 @@
                 <section id="lancamentos" class="page">
                     <div class="action-bar">
                         <button class="btn-primary" onclick="abrirModalLancamento()">+ Novo Lançamento</button>
+                        <button class="btn-secondary" onclick="baixarModeloLancamentos()">📋 Baixar Modelo</button>
                         <button class="btn-secondary" onclick="document.getElementById('input-excel-lancamentos').click()">📥 Importar Excel</button>
                         <input type="file" id="input-excel-lancamentos" accept=".xlsx,.xls,.csv" style="display:none" onchange="importarLancamentosExcel(this)">
                     </div>
@@ -270,11 +270,33 @@
                      HISTÓRICO DE AUDITORIA
                       -->
                 <section id="historico" class="page">
+                    <div class="action-bar" style="flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+                        <select id="hist-filtro-modulo" onchange="carregarEExibirHistorico()" style="font-size:0.85rem; padding:0.35rem 0.6rem; border:1px solid #e2e8f0; border-radius:6px;">
+                            <option value="">Todos os módulos</option>
+                            <option value="Lançamentos">Lançamentos</option>
+                            <option value="Orçamento">Orçamento</option>
+                            <option value="Plano de Contas">Plano de Contas</option>
+                            <option value="Prestação de Contas">Prestação de Contas</option>
+                            <option value="Irmãos">Irmãos</option>
+                            <option value="Acessos">Acessos</option>
+                        </select>
+                        <select id="hist-filtro-acao" onchange="carregarEExibirHistorico()" style="font-size:0.85rem; padding:0.35rem 0.6rem; border:1px solid #e2e8f0; border-radius:6px;">
+                            <option value="">Todas as ações</option>
+                            <option value="INSERÇÃO">Inserção</option>
+                            <option value="EDIÇÃO">Edição</option>
+                            <option value="EXCLUSÃO">Exclusão</option>
+                            <option value="IMPORTAÇÃO">Importação</option>
+                            <option value="ENVIO">Envio</option>
+                            <option value="ACESSO">Acesso</option>
+                        </select>
+                        <button class="btn-secondary" onclick="limparHistorico()" style="margin-left:auto;">🗑️ Limpar Histórico</button>
+                    </div>
                     <div class="table-container">
                         <table class="table-data">
                             <thead>
                                 <tr>
                                     <th>Data/Hora</th>
+                                    <th>Módulo</th>
                                     <th>Ação</th>
                                     <th>Detalhes</th>
                                     <th>Usuário</th>
@@ -460,32 +482,6 @@
                 <!--
                      CONFIGURAÇÕES (Categorias)
                       -->
-                <section id="configuracoes" class="page">
-                    <div class="config-section">
-                        <h3>Gerenciar Categorias</h3>
-                        <p class="text-muted mb-2">Adicione, edite ou remova as categorias usadas nos lançamentos.</p>
-                        
-                        <form id="form-tipificacao" class="form-inline mt-2">
-                            <input type="hidden" id="tipificacao-id">
-                            <input type="text" id="nova-tipificacao" placeholder="Nome da Categoria..." required>
-                            <button type="submit" class="btn-primary" id="btn-salvar-tipificacao">Adicionar</button>
-                            <button type="button" class="btn-secondary" id="btn-cancelar-tipificacao" style="display:none;" onclick="cancelarEdicaoTipificacao()">Cancelar</button>
-                        </form>
-
-                        <div class="table-container mt-2">
-                            <table class="table-data">
-                                <thead>
-                                    <tr>
-                                        <th>Nome da Categoria</th>
-                                        <th width="150">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tipificacoes-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
                                 <!--
                      ORÇAMENTO
                       -->
