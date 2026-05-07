@@ -1,32 +1,57 @@
 // ==========================================
-// ESTADO GLOBAL DA APLICAÇÃO E LOCALSTORAGE
+// ESTADO GLOBAL DA APLICAÇÃO
 // ==========================================
 let appData = {
     tipificacoes: [],
     lancamentos: [],
     eventos: [],
-    historico: []
+    historico: [],
+    irmaos: [],
+    planoContas: [],
+    orcamentos: []
 };
 
-// Função para salvar no navegador
-function salvarDados() {
-    localStorage.setItem('erp_financeiro_data', JSON.stringify(appData));
-}
+// salvarDados mantido como no-op — persistência migrada para Supabase
+function salvarDados() {}
 
-// Função para carregar dados do localStorage
-function carregarDados() {
-    const dadosSalvos = localStorage.getItem('erp_financeiro_data');
+async function carregarDados() {
+    const [
+        { data: lancs,   error: eLanc },
+        { data: evs,     error: eEv   },
+        { data: evLinks, error: eEl   },
+        { data: irms,    error: eIrm  }
+    ] = await Promise.all([
+        supabaseClient.from('lancamentos').select('*').order('data', { ascending: false }),
+        supabaseClient.from('eventos').select('*').order('data_criacao', { ascending: false }),
+        supabaseClient.from('evento_lancamentos').select('evento_id, lancamento_id'),
+        supabaseClient.from('irmaos').select('*').order('nome')
+    ]);
 
-    if (dadosSalvos) {
-        appData = JSON.parse(dadosSalvos);
-    }
+    if (eLanc) console.error('Erro lancamentos:', eLanc);
+    if (eEv)   console.error('Erro eventos:', eEv);
+    if (eEl)   console.error('Erro evento_lancamentos:', eEl);
+    if (eIrm)  console.error('Erro irmaos:', eIrm);
 
-    // Garante que todas as listas existem mesmo em dados antigos
-    if (!appData.tipificacoes) appData.tipificacoes = [];
-    if (!appData.lancamentos)  appData.lancamentos  = [];
-    if (!appData.eventos)      appData.eventos      = [];
-    if (!appData.historico)    appData.historico     = [];
-    if (!appData.irmaos)       appData.irmaos       = [];
+    // Normaliza lançamentos: tipificacao = conta_nome no DB
+    appData.lancamentos = (lancs || []).map(l => ({
+        ...l,
+        tipificacao: l.tipificacao || l.conta_nome || ''
+    }));
+
+    // Monta eventos com lista de ids de lançamentos vinculados
+    const linksMap = {};
+    (evLinks || []).forEach(el => {
+        if (!linksMap[el.evento_id]) linksMap[el.evento_id] = [];
+        linksMap[el.evento_id].push(el.lancamento_id);
+    });
+    appData.eventos = (evs || []).map(ev => ({
+        ...ev,
+        dataCriacao: ev.data_criacao,
+        contasSelecionadas: ev.contas_selecionadas || [],
+        lancamentosVinculados: linksMap[ev.id] || []
+    }));
+
+    appData.irmaos = irms || [];
 }
 
 // ==========================================
@@ -63,17 +88,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const nomeEl = document.getElementById('user-name');
     if (nomeEl) nomeEl.textContent = `Olá, ${perfil.nome}`;
 
-    // Carrega dados e configura formulários
-    carregarDados();
+    // Configura formulários
     document.getElementById('form-lancamento').addEventListener('submit', salvarLancamento);
     document.getElementById('form-evento').addEventListener('submit', salvarEvento);
+
+    // Carrega todos os dados do Supabase
+    await carregarPlanoContasSupabase();
+    await carregarDados();
 
     renderizarIrmaos();
     atualizarSelectTipificacoes();
     renderizarLancamentos();
     renderizarEventos();
     inicializarControle();
-    await carregarPlanoContasSupabase();
     await carregarOrcamento(); // dispara setDashPeriodo('anual') ao final
     carregarControleAcessos();
 });
@@ -207,7 +234,7 @@ function fecharModalNotaFiscal() {
     document.getElementById('modal-nota-fiscal-body').innerHTML = '';
 }
 
-function removerNotaFiscal() {
+async function removerNotaFiscal() {
     const id = document.getElementById('lancamento-id').value;
     if (!id) return;
     const lanc = appData.lancamentos.find(l => l.id == id);
@@ -218,21 +245,23 @@ function removerNotaFiscal() {
         supabaseClient.storage.from('notas-fiscais').remove([caminho]);
     }
     lanc.nota_fiscal_url = null;
+    await supabaseClient.from('lancamentos').update({ nota_fiscal_url: null }).eq('id', id);
     document.getElementById('lancamento-nota-atual').style.display = 'none';
-    salvarDados();
     renderizarLancamentos();
 }
 
 async function salvarLancamento(e) {
     e.preventDefault();
     const id = document.getElementById('lancamento-id').value;
-    const dados = {
-        tipo: document.getElementById('lancamento-tipo').value,
-        tipificacao: document.getElementById('lancamento-tipificacao').value,
-        data: document.getElementById('lancamento-data').value,
-        historico: document.getElementById('lancamento-historico').value,
-        descricao: document.getElementById('lancamento-descricao').value,
-        valor: parseFloat(document.getElementById('lancamento-valor').value)
+    const tipificacao = document.getElementById('lancamento-tipificacao').value;
+    const payload = {
+        tipo:       document.getElementById('lancamento-tipo').value,
+        tipificacao,
+        conta_nome: tipificacao,
+        data:       document.getElementById('lancamento-data').value,
+        historico:  document.getElementById('lancamento-historico').value,
+        descricao:  document.getElementById('lancamento-descricao').value,
+        valor:      parseFloat(document.getElementById('lancamento-valor').value)
     };
 
     // Upload da nota fiscal, se selecionada
@@ -240,50 +269,55 @@ async function salvarLancamento(e) {
     const arquivo = fileInput.files[0];
     if (arquivo) {
         const url = await uploadNotaFiscal(arquivo, id || Date.now());
-        if (url) dados.nota_fiscal_url = url;
+        if (url) payload.nota_fiscal_url = url;
     } else if (id) {
-        // Preserva a nota existente se não foi selecionado novo arquivo
         const lancExistente = appData.lancamentos.find(l => l.id == id);
-        if (lancExistente?.nota_fiscal_url) dados.nota_fiscal_url = lancExistente.nota_fiscal_url;
+        if (lancExistente?.nota_fiscal_url) payload.nota_fiscal_url = lancExistente.nota_fiscal_url;
     }
 
+    let savedId;
     if (id) {
-        const index = appData.lancamentos.findIndex(l => l.id == id);
-        appData.lancamentos[index] = { ...dados, id: parseInt(id) };
-        registrarHistorico('EDIÇÃO', `${dados.tipo} | R$ ${dados.valor.toFixed(2)} | ${dados.historico}`, 'Lançamentos');
+        const { error } = await supabaseClient.from('lancamentos').update(payload).eq('id', id);
+        if (error) { alert('Erro ao salvar lançamento: ' + error.message); return; }
+        savedId = parseInt(id);
+        registrarHistorico('EDIÇÃO', `${payload.tipo} | R$ ${payload.valor.toFixed(2)} | ${payload.historico}`, 'Lançamentos');
     } else {
-        appData.lancamentos.push({ ...dados, id: Date.now() });
-        registrarHistorico('INSERÇÃO', `${dados.tipo} | R$ ${dados.valor.toFixed(2)} | ${dados.historico}`, 'Lançamentos');
+        const { data, error } = await supabaseClient.from('lancamentos').insert(payload).select().single();
+        if (error) { alert('Erro ao salvar lançamento: ' + error.message); return; }
+        savedId = data.id;
+        registrarHistorico('INSERÇÃO', `${payload.tipo} | R$ ${payload.valor.toFixed(2)} | ${payload.historico}`, 'Lançamentos');
     }
+
+    // Recarrega lançamentos do banco para manter appData sincronizado
+    const { data: lancs } = await supabaseClient.from('lancamentos').select('*').order('data', { ascending: false });
+    appData.lancamentos = (lancs || []).map(l => ({ ...l, tipificacao: l.tipificacao || l.conta_nome || '' }));
 
     fecharModalLancamento();
     renderizarLancamentos();
     atualizarDashboardPremium();
     aplicarFiltrosControle();
 
-    if(document.getElementById('modal-evento').classList.contains('show')) {
+    if (document.getElementById('modal-evento').classList.contains('show')) {
         carregarLancamentosParaVinculo();
     }
-
-    salvarDados();
 }
 
-function excluirLancamento(id) {
-    if (confirm('Tem certeza que deseja excluir este lançamento?')) {
-        const lanc = appData.lancamentos.find(l => l.id === id);
-        appData.lancamentos = appData.lancamentos.filter(l => l.id !== id);
-        
-        appData.eventos.forEach(ev => {
-            ev.lancamentosVinculados = ev.lancamentosVinculados.filter(vId => vId !== id);
-        });
+async function excluirLancamento(id) {
+    if (!confirm('Tem certeza que deseja excluir este lançamento?')) return;
+    const lanc = appData.lancamentos.find(l => l.id === id);
+    const { error } = await supabaseClient.from('lancamentos').delete().eq('id', id);
+    if (error) { alert('Erro ao excluir lançamento: ' + error.message); return; }
 
-        registrarHistorico('EXCLUSÃO', `${lanc.tipo} | R$ ${lanc.valor.toFixed(2)} | ${lanc.historico}`, 'Lançamentos');
-        renderizarLancamentos();
-        atualizarDashboardPremium();
-        aplicarFiltrosControle();
-        renderizarEventos();
-        salvarDados();
-    }
+    appData.lancamentos = appData.lancamentos.filter(l => l.id !== id);
+    appData.eventos.forEach(ev => {
+        ev.lancamentosVinculados = ev.lancamentosVinculados.filter(vId => vId !== id);
+    });
+
+    registrarHistorico('EXCLUSÃO', `${lanc.tipo} | R$ ${lanc.valor.toFixed(2)} | ${lanc.historico}`, 'Lançamentos');
+    renderizarLancamentos();
+    atualizarDashboardPremium();
+    aplicarFiltrosControle();
+    renderizarEventos();
 }
 
 function renderizarLancamentos() {
@@ -397,45 +431,68 @@ function selecionarTodosVinculos(marcar) {
     document.querySelectorAll('.chk-vinculo').forEach(c => c.checked = marcar);
 }
 
-function salvarEvento(e) {
+async function salvarEvento(e) {
     e.preventDefault();
     const id = document.getElementById('evento-id').value;
 
-    const checkboxes = document.querySelectorAll('.chk-vinculo:checked');
-    const lancamentosVinculados = Array.from(checkboxes).map(chk => parseInt(chk.value));
+    const lancamentosVinculados = Array.from(document.querySelectorAll('.chk-vinculo:checked')).map(chk => parseInt(chk.value));
     const contasSelecionadas = getContasSelecionadasEvento();
 
-    const dados = {
-        nome: document.getElementById('evento-nome').value,
-        contasSelecionadas,
-        tipificacao: contasSelecionadas.join(', '), // compatibilidade legada
-        informacoes: document.getElementById('evento-informacoes').value,
-        lancamentosVinculados,
-        dataCriacao: new Date().toISOString()
+    const payload = {
+        nome:                document.getElementById('evento-nome').value,
+        tipificacao:         contasSelecionadas.join(', '),
+        contas_selecionadas: contasSelecionadas,
+        informacoes:         document.getElementById('evento-informacoes').value,
     };
 
+    let eventoId;
     if (id) {
-        const index = appData.eventos.findIndex(ev => ev.id == id);
-        appData.eventos[index] = { ...dados, id: parseInt(id) };
-        registrarHistorico('EDIÇÃO', `Evento: ${dados.nome}`, 'Prestação de Contas');
+        const { error } = await supabaseClient.from('eventos').update(payload).eq('id', id);
+        if (error) { alert('Erro ao salvar evento: ' + error.message); return; }
+        eventoId = parseInt(id);
+        registrarHistorico('EDIÇÃO', `Evento: ${payload.nome}`, 'Prestação de Contas');
     } else {
-        appData.eventos.push({ ...dados, id: Date.now() });
-        registrarHistorico('INSERÇÃO', `Evento: ${dados.nome}`, 'Prestação de Contas');
+        const { data, error } = await supabaseClient.from('eventos').insert(payload).select().single();
+        if (error) { alert('Erro ao salvar evento: ' + error.message); return; }
+        eventoId = data.id;
+        registrarHistorico('INSERÇÃO', `Evento: ${payload.nome}`, 'Prestação de Contas');
     }
+
+    // Atualiza vínculos: remove os existentes e insere os novos
+    await supabaseClient.from('evento_lancamentos').delete().eq('evento_id', eventoId);
+    if (lancamentosVinculados.length > 0) {
+        const links = lancamentosVinculados.map(lid => ({ evento_id: eventoId, lancamento_id: lid }));
+        const { error } = await supabaseClient.from('evento_lancamentos').insert(links);
+        if (error) { alert('Erro ao vincular lançamentos: ' + error.message); return; }
+    }
+
+    // Recarrega eventos
+    const { data: evs } = await supabaseClient.from('eventos').select('*').order('data_criacao', { ascending: false });
+    const { data: evLinks } = await supabaseClient.from('evento_lancamentos').select('evento_id, lancamento_id');
+    const linksMap = {};
+    (evLinks || []).forEach(el => {
+        if (!linksMap[el.evento_id]) linksMap[el.evento_id] = [];
+        linksMap[el.evento_id].push(el.lancamento_id);
+    });
+    appData.eventos = (evs || []).map(ev => ({
+        ...ev,
+        dataCriacao: ev.data_criacao,
+        contasSelecionadas: ev.contas_selecionadas || [],
+        lancamentosVinculados: linksMap[ev.id] || []
+    }));
 
     fecharModalEvento();
     renderizarEventos();
-    salvarDados();
 }
 
-function excluirEvento(id) {
-    if (confirm('Excluir este evento de prestação de contas? Os lançamentos não serão apagados, apenas desvinculados.')) {
-        const ev = appData.eventos.find(e => e.id === id);
-        appData.eventos = appData.eventos.filter(e => e.id !== id);
-        registrarHistorico('EXCLUSÃO', `Evento: ${ev.nome}`, 'Prestação de Contas');
-        renderizarEventos();
-        salvarDados();
-    }
+async function excluirEvento(id) {
+    if (!confirm('Excluir este evento? Os lançamentos não serão apagados, apenas desvinculados.')) return;
+    const ev = appData.eventos.find(e => e.id === id);
+    const { error } = await supabaseClient.from('eventos').delete().eq('id', id);
+    if (error) { alert('Erro ao excluir evento: ' + error.message); return; }
+    appData.eventos = appData.eventos.filter(e => e.id !== id);
+    registrarHistorico('EXCLUSÃO', `Evento: ${ev.nome}`, 'Prestação de Contas');
+    renderizarEventos();
 }
 
 function renderizarEventos() {
@@ -1942,42 +1999,42 @@ function fecharModalIrmao() {
     document.getElementById('modal-irmao').classList.remove('show');
 }
 
-document.getElementById('form-irmao').addEventListener('submit', function(e) {
+document.getElementById('form-irmao').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const id = document.getElementById('irmao-id').value;
-    const dados = {
-        nome: document.getElementById('irmao-nome').value,
-        email: document.getElementById('irmao-email').value,
+    const payload = {
+        nome:     document.getElementById('irmao-nome').value,
+        email:    document.getElementById('irmao-email').value,
         whatsapp: document.getElementById('irmao-whatsapp').value,
-        ativo: document.getElementById('irmao-ativo').checked
+        ativo:    document.getElementById('irmao-ativo').checked
     };
 
-    if (!appData.irmaos) appData.irmaos = [];
-
     if (id) {
-        const index = appData.irmaos.findIndex(i => i.id == id);
-        appData.irmaos[index] = { ...dados, id: parseInt(id) };
-        registrarHistorico('EDIÇÃO', `Irmão: ${dados.nome}`, 'Irmãos');
+        const { error } = await supabaseClient.from('irmaos').update(payload).eq('id', id);
+        if (error) { alert('Erro ao salvar irmão: ' + error.message); return; }
+        registrarHistorico('EDIÇÃO', `Irmão: ${payload.nome}`, 'Irmãos');
     } else {
-        const novoId = appData.irmaos.length > 0 ? Math.max(...appData.irmaos.map(i => i.id)) + 1 : 1;
-        appData.irmaos.push({ ...dados, id: novoId });
-        registrarHistorico('INSERÇÃO', `Irmão: ${dados.nome}`, 'Irmãos');
+        const { error } = await supabaseClient.from('irmaos').insert(payload);
+        if (error) { alert('Erro ao salvar irmão: ' + error.message); return; }
+        registrarHistorico('INSERÇÃO', `Irmão: ${payload.nome}`, 'Irmãos');
     }
+
+    const { data: irms } = await supabaseClient.from('irmaos').select('*').order('nome');
+    appData.irmaos = irms || [];
 
     fecharModalIrmao();
     renderizarIrmaos();
-    salvarDados();
 });
 
-function excluirIrmao(id) {
-    if (confirm('Tem certeza que deseja excluir este irmão?')) {
-        const irmao = appData.irmaos.find(i => i.id === id);
-        appData.irmaos = appData.irmaos.filter(i => i.id !== id);
-        registrarHistorico('EXCLUSÃO', `Irmão: ${irmao.nome}`, 'Irmãos');
-        renderizarIrmaos();
-        salvarDados();
-    }
+async function excluirIrmao(id) {
+    if (!confirm('Tem certeza que deseja excluir este irmão?')) return;
+    const irmao = appData.irmaos.find(i => i.id === id);
+    const { error } = await supabaseClient.from('irmaos').delete().eq('id', id);
+    if (error) { alert('Erro ao excluir irmão: ' + error.message); return; }
+    appData.irmaos = appData.irmaos.filter(i => i.id !== id);
+    registrarHistorico('EXCLUSÃO', `Irmão: ${irmao.nome}`, 'Irmãos');
+    renderizarIrmaos();
 }
 
 // 

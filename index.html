@@ -28,6 +28,7 @@
                 <a href="#plano-contas" class="nav-link" data-page="plano-contas">📊 Plano de Contas</a>
                 <a href="#prestacoes" class="nav-link" data-page="prestacoes">📋 Prestação de Contas</a>
                 <a href="#controle" class="nav-link" data-page="controle">📈 Relatórios</a>
+                <a href="#documentacao" class="nav-link" data-page="documentacao">📖 Documentação</a>
             </nav>
 
             <div class="sidebar-footer">
@@ -536,7 +537,153 @@
                     </div>
                 </section>
 
-                <!-- 
+                <!-- DOCUMENTAÇÃO -->
+                <section id="documentacao" class="page">
+                    <div class="page-header">
+                        <h2>📖 Documentação do Sistema</h2>
+                    </div>
+
+                    <div style="max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:1.5rem; font-size:0.92rem; line-height:1.7; color:#334155;">
+
+                        <!-- Introdução -->
+                        <div style="background:linear-gradient(135deg,#1a5f4a,#2d8a6a); color:white; border-radius:12px; padding:2rem;">
+                            <h3 style="color:white; margin:0 0 0.5rem;">Sistema de Gestão Financeira</h3>
+                            <p style="margin:0; opacity:0.92;">Plataforma de controle financeiro desenvolvida para administração de receitas, despesas, orçamento e prestação de contas. O acesso é restrito a administradores aprovados. Usuários comuns podem solicitar acesso, mas dependem de aprovação do administrador para visualizar dados.</p>
+                        </div>
+
+                        <!-- Dashboard -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #3b82f6;">
+                            <h4 style="margin:0 0 0.75rem; color:#1e40af;">📊 Dashboard</h4>
+                            <p>Visão consolidada da execução orçamentária. Ao acessar a tela, os dados são carregados automaticamente com o filtro <strong>Anual</strong> para o ano corrente.</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li><strong>Seletor de ano:</strong> permite alternar entre exercícios orçamentários disponíveis.</li>
+                                <li><strong>Filtros de período:</strong> Anual, Semestral, Trimestral, Mensal e Intervalo de datas.</li>
+                                <li><strong>KPIs:</strong> exibe Receitas, Despesas e Resultado com valores orçados, realizados, percentual de execução e desvio.</li>
+                                <li><strong>Gráfico Orçado x Realizado:</strong> comparativo mensal por barras.</li>
+                                <li><strong>Desvio por grupo de contas:</strong> tabela detalhada com percentual de execução por grupo.</li>
+                                <li><strong>Resumo por período:</strong> saldo líquido, total de receitas/despesas, maior despesa, média diária e quantidade de lançamentos.</li>
+                                <li><strong>Alertas automáticos:</strong> identifica despesas acima do orçado, receitas abaixo de 70% e resultado negativo.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Controle de Acessos -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #8b5cf6;">
+                            <h4 style="margin:0 0 0.75rem; color:#6d28d9;">🔑 Controle de Acessos</h4>
+                            <p>Gerenciamento de usuários que solicitaram acesso à plataforma.</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li><strong>Pendentes:</strong> novos cadastros aguardando revisão. O badge vermelho no sidebar indica solicitações pendentes.</li>
+                                <li><strong>Aprovação:</strong> clique em "Aprovar" para liberar o acesso do usuário.</li>
+                                <li><strong>Rejeição:</strong> clique em "Rejeitar" para negar o acesso.</li>
+                                <li>Usuários rejeitados ou pendentes não conseguem acessar nenhuma funcionalidade do sistema.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Histórico -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #64748b;">
+                            <h4 style="margin:0 0 0.75rem; color:#475569;">🕒 Histórico</h4>
+                            <p>Registro de auditoria de todas as ações realizadas no sistema (inserções, edições e exclusões).</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li><strong>Filtro por módulo:</strong> filtra ações por área (Lançamentos, Orçamento, Irmãos etc.).</li>
+                                <li><strong>Filtro por ação:</strong> filtra por tipo de operação (Inserção, Edição, Exclusão).</li>
+                                <li><strong>Limpar histórico:</strong> apaga todos os registros de auditoria (ação irreversível).</li>
+                            </ul>
+                        </div>
+
+                        <!-- Irmãos -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #10b981;">
+                            <h4 style="margin:0 0 0.75rem; color:#065f46;">👥 Irmãos</h4>
+                            <p>Cadastro de membros da organização.</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li>Cadastro com nome, situação (Normal, Remido, Licenciado) e demais informações relevantes.</li>
+                                <li>Os dados de irmãos são utilizados como base para o cálculo automático de mensalidades no orçamento.</li>
+                                <li>Edição e exclusão disponíveis diretamente na listagem.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Lançamentos -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #f59e0b;">
+                            <h4 style="margin:0 0 0.75rem; color:#92400e;">📝 Lançamentos</h4>
+                            <p>Registro de movimentações financeiras (receitas e despesas).</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li><strong>Novo lançamento:</strong> informe Tipo (Receita/Despesa), Conta, Data, Título, Descrição detalhada e Valor.</li>
+                                <li><strong>Nota Fiscal:</strong> é possível anexar um arquivo (PDF, JPG ou PNG) a cada lançamento. O arquivo é armazenado no Supabase Storage (bucket <em>notas-fiscais</em>).</li>
+                                <li><strong>Visualizar NF:</strong> o ícone 📎 na coluna NF abre a nota fiscal em um modal de visualização diretamente na tela.</li>
+                                <li><strong>Edição e exclusão:</strong> disponíveis via botões na tabela. A exclusão de um lançamento vinculado a um evento o desvincula automaticamente.</li>
+                                <li><strong>Importação CSV:</strong> permite importar lançamentos em massa via arquivo CSV.</li>
+                                <li><strong>Exportação:</strong> exporta os lançamentos filtrados para CSV ou imprime em PDF.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Orçamento -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #1a5f4a;">
+                            <h4 style="margin:0 0 0.75rem; color:#1a5f4a;">💵 Orçamento</h4>
+                            <p>Planejamento orçamentário anual com projeção de receitas e despesas por conta.</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li><strong>Exercícios:</strong> cada ano representa um exercício orçamentário. É possível criar, copiar e excluir exercícios pelo painel lateral.</li>
+                                <li><strong>Parâmetros:</strong> defina o número de obreiros (Normal, Remido, Licenciado), valores de mensalidade, taxa de inadimplência, taxa GOB e taxa GODF por mês.</li>
+                                <li><strong>Planilha:</strong> tabela de projeção de receitas e despesas por conta. Valores são editáveis diretamente nas células (modo mensal). Os filtros Trimestral e Semestral exibem os valores consolidados (somente leitura).</li>
+                                <li><strong>Adicionar/excluir linhas:</strong> use o botão "+ Adicionar linha" ao final de cada grupo para inserir uma nova conta, e o botão ✕ para remover uma linha existente.</li>
+                                <li><strong>Contas automáticas:</strong> Mensalidades e Inadimplência são calculadas automaticamente com base nos parâmetros; não são editáveis diretamente.</li>
+                                <li><strong>Copiar exercício:</strong> duplica os parâmetros e valores de um ano para outro.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Plano de Contas -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #0ea5e9;">
+                            <h4 style="margin:0 0 0.75rem; color:#0369a1;">📊 Plano de Contas</h4>
+                            <p>Estrutura hierárquica que organiza as contas de receita e despesa.</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li><strong>Grupos:</strong> agrupadores de tipo RECEITA ou DESPESA (ex: "Contribuições", "Despesas Administrativas").</li>
+                                <li><strong>Contas:</strong> subcontas dentro de cada grupo, utilizadas na classificação dos lançamentos e no orçamento.</li>
+                                <li>Alterações no plano de contas refletem imediatamente nos seletores de conta dos lançamentos e na planilha de orçamento.</li>
+                                <li>Contas vinculadas a lançamentos existentes não devem ser excluídas sem antes reclassificar os lançamentos.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Prestação de Contas -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #ec4899;">
+                            <h4 style="margin:0 0 0.75rem; color:#9d174d;">📋 Prestação de Contas</h4>
+                            <p>Criação de eventos financeiros para agrupamento e apresentação de lançamentos ao quadro de irmãos.</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li><strong>Criar evento:</strong> defina o nome, selecione uma ou mais contas associadas e informe uma justificativa.</li>
+                                <li><strong>Vincular lançamentos:</strong> após selecionar as contas, os lançamentos dessas contas são listados para seleção. Use "Marcar todos" / "Desmarcar todos" para agilizar.</li>
+                                <li><strong>Visualização do evento:</strong> exibe resumo de receitas, despesas e saldo, além da listagem completa dos lançamentos vinculados.</li>
+                                <li><strong>Gerar relatório:</strong> gera um documento de prestação de contas com filtro por período, exportável em CSV e imprimível em PDF.</li>
+                                <li><strong>Enviar para irmãos:</strong> permite enviar a prestação de contas por e-mail aos membros cadastrados.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Relatórios -->
+                        <div style="background:white; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #f97316;">
+                            <h4 style="margin:0 0 0.75rem; color:#c2410c;">📈 Relatórios</h4>
+                            <p>Análise detalhada dos lançamentos com filtros avançados e exportação.</p>
+                            <ul style="margin:0.5rem 0 0 1.2rem; padding:0;">
+                                <li><strong>Filtros:</strong> data inicial, data final, tipo (Receita/Despesa) e conta.</li>
+                                <li><strong>Resumo financeiro:</strong> totais de receitas, despesas e resultado do período filtrado.</li>
+                                <li><strong>Gráficos:</strong> distribuição de receitas e despesas por categoria.</li>
+                                <li><strong>Exportar CSV:</strong> exporta os dados filtrados em formato compatível com Excel.</li>
+                                <li><strong>Imprimir / PDF:</strong> gera versão para impressão ou salvamento em PDF.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Boas práticas -->
+                        <div style="background:#fefce8; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.08); padding:1.5rem; border-left:4px solid #ca8a04;">
+                            <h4 style="margin:0 0 0.75rem; color:#92400e;">⚠️ Boas Práticas e Avisos</h4>
+                            <ul style="margin:0 0 0 1.2rem; padding:0;">
+                                <li>Configure o <strong>Plano de Contas</strong> antes de realizar lançamentos ou criar o orçamento.</li>
+                                <li>Crie o <strong>exercício orçamentário</strong> do ano vigente antes de acessar o Dashboard para que os valores orçados sejam exibidos corretamente.</li>
+                                <li>Ao excluir uma conta do plano ou do orçamento, os lançamentos associados perdem a referência à conta — revise antes de excluir.</li>
+                                <li>As notas fiscais são armazenadas no Supabase Storage. O bucket <em>notas-fiscais</em> deve existir e ter leitura pública habilitada.</li>
+                                <li>O histórico de auditoria é permanente até que o administrador o limpe manualmente.</li>
+                                <li>Toda a camada de persistência utiliza o <strong>Supabase</strong> (PostgreSQL). Lançamentos, eventos, irmãos, orçamento, plano de contas e histórico são salvos no banco de dados remoto.</li>
+                            </ul>
+                        </div>
+
+                        <p style="text-align:center; color:#94a3b8; font-size:0.8rem; padding-bottom:1rem;">Sistema de Gestão Financeira — Documentação do Administrador</p>
+                    </div>
+                </section>
+
+                <!--
                      PLANO DE CONTAS
                       -->
                 <section id="plano-contas" class="page">
