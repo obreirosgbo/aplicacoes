@@ -20,14 +20,14 @@
             
             <nav class="sidebar-nav">
                 <a href="#dashboard" class="nav-link active" data-page="dashboard">📊 Dashboard</a>
-                <a href="#lancamentos" class="nav-link" data-page="lancamentos">📝 Lançamentos</a>
+                <a href="#controle-acessos" class="nav-link" data-page="controle-acessos">🔑 Controle de Acessos <span id="badge-pendentes" class="badge-pendentes" style="display:none;"></span></a>
                 <a href="#historico" class="nav-link" data-page="historico">🕒 Histórico</a>
-                <a href="#controle" class="nav-link" data-page="controle">📈 Relatórios</a>
-                <a href="#prestacoes" class="nav-link" data-page="prestacoes">📋 Prestação de Contas</a>
                 <a href="#irmãos" class="nav-link" data-page="irmãos">👥 Irmãos</a>
+                <a href="#lancamentos" class="nav-link" data-page="lancamentos">📝 Lançamentos</a>
                 <a href="#orcamento" class="nav-link" data-page="orcamento">💵 Orçamento</a>
                 <a href="#plano-contas" class="nav-link" data-page="plano-contas">📊 Plano de Contas</a>
-                <a href="#controle-acessos" class="nav-link" data-page="controle-acessos">🔑 Controle de Acessos <span id="badge-pendentes" class="badge-pendentes" style="display:none;"></span></a>
+                <a href="#prestacoes" class="nav-link" data-page="prestacoes">📋 Prestação de Contas</a>
+                <a href="#controle" class="nav-link" data-page="controle">📈 Relatórios</a>
             </nav>
 
             <div class="sidebar-footer">
@@ -58,6 +58,8 @@
                             <h3 style="margin:0;">Execução Orçamentária</h3>
                             <span id="dash-exercicio-label" style="font-size:0.85rem; color:#64748b; font-weight:600;"></span>
                             <div style="margin-left:auto; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                                <!-- Seletor de ano -->
+                                <div id="dash-filtro-ano" style="display:flex; gap:0.4rem; align-items:center;"></div>
                                 <!-- Botões de período -->
                                 <div style="display:flex; gap:0.25rem; background:#f1f5f9; border-radius:6px; padding:0.2rem;">
                                     <button id="dash-btn-anual"     onclick="setDashPeriodo('anual')"     style="font-size:0.75rem; padding:0.25rem 0.6rem; border:none; border-radius:4px; cursor:pointer; background:#1a5f4a; color:white; font-weight:600;">Anual</button>
@@ -255,9 +257,10 @@
                                     <th>Data</th>
                                     <th>Tipo</th>
                                     <th>Categoria</th>
-                                    <th>Histórico</th>
+                                    <th>Título</th>
                                     <th>Descrição</th>
                                     <th>Valor</th>
+                                    <th>NF</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -582,7 +585,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Histórico (Título Curto)</label>
+                    <label>Título</label>
                     <input type="text" id="lancamento-historico" placeholder="Ex: Compra de Materiais" required>
                 </div>
 
@@ -594,6 +597,16 @@
                 <div class="form-group">
                     <label>Valor (R$)</label>
                     <input type="number" step="0.01" min="0.01" id="lancamento-valor" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Nota Fiscal</label>
+                    <input type="file" id="lancamento-nota-fiscal" accept=".pdf,.jpg,.jpeg,.png" style="font-size:0.9rem;">
+                    <div id="lancamento-nota-atual" style="display:none; margin-top:0.4rem; font-size:0.82rem; color:#475569; display:flex; align-items:center; gap:0.5rem;">
+                        <span>📎 Nota atual:</span>
+                        <a id="lancamento-nota-link" href="#" target="_blank" style="color:#1a5f4a; font-weight:600;">Ver arquivo</a>
+                        <button type="button" onclick="removerNotaFiscal()" style="font-size:0.75rem; padding:0.15rem 0.4rem; background:#fee2e2; color:#dc2626; border:none; border-radius:4px; cursor:pointer;">Remover</button>
+                    </div>
                 </div>
 
                 <div class="modal-footer">
@@ -620,30 +633,35 @@
                     <input type="text" id="evento-nome" placeholder="Ex: Festa de Fim de Ano 2025" required>
                 </div>
                 <div class="form-group">
-                    <label>Categoria (Categoria Associada)</label>
-                    <select id="evento-tipificacao" required onchange="carregarLancamentosParaVinculo()"></select>
-                    <small class="text-muted">Apenas lançamentos desta categoria poderão ser vinculados.</small>
+                    <label>Contas Associadas</label>
+                    <div id="evento-contas-lista" style="display:flex; flex-wrap:wrap; gap:0.5rem; padding:0.6rem; border:1px solid #e2e8f0; border-radius:6px; min-height:2.5rem; background:#f8fafc;"></div>
+                    <small class="text-muted">Selecione uma ou mais contas. Os lançamentos dessas contas serão listados abaixo.</small>
                 </div>
                 <div class="form-group">
                     <label>Informações / Justificativa</label>
                     <textarea id="evento-informacoes" rows="3" placeholder="Descreva o propósito deste evento..." required></textarea>
                 </div>
-                
+
                 <div class="form-group mt-2">
                     <label>Vincular Lançamentos a este Evento</label>
-                    <div class="table-container" style="max-height: 250px; overflow-y: auto;">
+                    <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
+                        <button type="button" onclick="selecionarTodosVinculos(true)"  style="font-size:0.75rem; padding:0.2rem 0.6rem; border:1px solid #cbd5e1; border-radius:4px; background:white; cursor:pointer;">Marcar todos</button>
+                        <button type="button" onclick="selecionarTodosVinculos(false)" style="font-size:0.75rem; padding:0.2rem 0.6rem; border:1px solid #cbd5e1; border-radius:4px; background:white; cursor:pointer;">Desmarcar todos</button>
+                    </div>
+                    <div class="table-container" style="max-height: 280px; overflow-y: auto;">
                         <table class="table-data">
                             <thead>
                                 <tr>
                                     <th width="50">Vincular</th>
                                     <th>Data</th>
                                     <th>Tipo</th>
+                                    <th>Conta</th>
                                     <th>Histórico</th>
                                     <th>Valor</th>
                                 </tr>
                             </thead>
                             <tbody id="evento-lancamentos-body">
-                                <tr><td colspan="5" class="text-center">Selecione uma categoria acima.</td></tr>
+                                <tr><td colspan="6" class="text-center">Selecione ao menos uma conta acima.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -840,7 +858,22 @@
         </div>
     </div>
 
-    <!-- 
+    <!-- MODAL VISUALIZADOR DE NOTA FISCAL -->
+    <div id="modal-nota-fiscal" class="modal">
+        <div class="modal-content" style="max-width:860px; width:95vw;">
+            <div class="modal-header">
+                <h3>📎 Nota Fiscal</h3>
+                <span class="close-modal" onclick="fecharModalNotaFiscal()">&times;</span>
+            </div>
+            <div id="modal-nota-fiscal-body" style="min-height:480px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border-radius:0 0 8px 8px; overflow:hidden;"></div>
+            <div class="modal-footer">
+                <a id="modal-nota-fiscal-download" href="#" target="_blank" class="btn-primary" style="text-decoration:none;">⬇️ Abrir em nova aba</a>
+                <button type="button" class="btn-secondary" onclick="fecharModalNotaFiscal()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!--
          MODAL DE ENVIO DE PRESTAÇÃO DE CONTAS
           -->
      <!-- 

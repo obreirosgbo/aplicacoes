@@ -71,11 +71,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderizarIrmaos();
     atualizarSelectTipificacoes();
     renderizarLancamentos();
-    atualizarDashboardPremium();
     renderizarEventos();
     inicializarControle();
     await carregarPlanoContasSupabase();
-    await carregarOrcamento();
+    await carregarOrcamento(); // dispara setDashPeriodo('anual') ao final
     carregarControleAcessos();
 });
 
@@ -100,15 +99,21 @@ function configurarNavegacao() {
             title.textContent = link.textContent.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|\p{Emoji_Presentation}/gu, '').trim();
 
             if (pageId === 'historico') carregarEExibirHistorico();
+            if (pageId === 'dashboard') {
+                // Inicializa o ano com o mais recente disponível (ou ano atual)
+                const anosDisponiveis = orcExerciciosDisponiveis.length > 0
+                    ? orcExerciciosDisponiveis
+                    : [new Date().getFullYear()];
+                dashAno = anosDisponiveis[anosDisponiveis.length - 1];
+                // Garante que orcValores está carregado para o ano do dashboard
+                trocarExercicio(dashAno).then(() => setDashPeriodo('anual'));
+            }
         });
     });
 }
 
 
 function atualizarSelectTipificacoes() {
-    // Evento usa tipificações antigas
-    const options = '<option value="">Selecione...</option>' + appData.tipificacoes.map(t => `<option value="${t.nome}">${t.nome}</option>`).join('');
-    document.getElementById('evento-tipificacao').innerHTML = options;
     // Lançamento: contas do plano (filtradas pelo tipo selecionado)
     filtrarContasPorTipo();
 }
@@ -146,6 +151,7 @@ function abrirModalLancamento(id = null) {
     document.getElementById('form-lancamento').reset();
     document.getElementById('lancamento-id').value = '';
     document.getElementById('modal-lancamento-title').textContent = 'Novo Lançamento';
+    document.getElementById('lancamento-nota-atual').style.display = 'none';
 
     if (id) {
         const lanc = appData.lancamentos.find(l => l.id === id);
@@ -158,17 +164,66 @@ function abrirModalLancamento(id = null) {
         document.getElementById('lancamento-descricao').value = lanc.descricao || '';
         document.getElementById('lancamento-valor').value = lanc.valor;
         document.getElementById('modal-lancamento-title').textContent = 'Editar Lançamento';
+        if (lanc.nota_fiscal_url) {
+            const el = document.getElementById('lancamento-nota-atual');
+            el.style.display = 'flex';
+            document.getElementById('lancamento-nota-link').href = lanc.nota_fiscal_url;
+        }
     } else {
         document.getElementById('lancamento-data').valueAsDate = new Date();
     }
     document.getElementById('modal-lancamento').classList.add('show');
 }
 
-function fecharModalLancamento() { 
-    document.getElementById('modal-lancamento').classList.remove('show'); 
+function fecharModalLancamento() {
+    document.getElementById('modal-lancamento').classList.remove('show');
 }
 
-function salvarLancamento(e) {
+async function uploadNotaFiscal(arquivo, lancamentoId) {
+    const ext = arquivo.name.split('.').pop();
+    const caminho = `${lancamentoId}_${Date.now()}.${ext}`;
+    const { error } = await supabaseClient.storage
+        .from('notas-fiscais')
+        .upload(caminho, arquivo, { upsert: true });
+    if (error) { alert('Erro ao enviar nota fiscal: ' + error.message); return null; }
+    const { data } = supabaseClient.storage.from('notas-fiscais').getPublicUrl(caminho);
+    return data.publicUrl;
+}
+
+function abrirModalNotaFiscal(url) {
+    const body = document.getElementById('modal-nota-fiscal-body');
+    document.getElementById('modal-nota-fiscal-download').href = url;
+    const ext = url.split('?')[0].split('.').pop().toLowerCase();
+    if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
+        body.innerHTML = `<img src="${url}" style="max-width:100%; max-height:70vh; object-fit:contain; border-radius:4px;">`;
+    } else {
+        body.innerHTML = `<iframe src="${url}" style="width:100%; height:70vh; border:none;"></iframe>`;
+    }
+    document.getElementById('modal-nota-fiscal').classList.add('show');
+}
+
+function fecharModalNotaFiscal() {
+    document.getElementById('modal-nota-fiscal').classList.remove('show');
+    document.getElementById('modal-nota-fiscal-body').innerHTML = '';
+}
+
+function removerNotaFiscal() {
+    const id = document.getElementById('lancamento-id').value;
+    if (!id) return;
+    const lanc = appData.lancamentos.find(l => l.id == id);
+    if (!lanc?.nota_fiscal_url) return;
+    // Extrai o caminho do arquivo da URL pública
+    const caminho = lanc.nota_fiscal_url.split('/notas-fiscais/')[1];
+    if (caminho) {
+        supabaseClient.storage.from('notas-fiscais').remove([caminho]);
+    }
+    lanc.nota_fiscal_url = null;
+    document.getElementById('lancamento-nota-atual').style.display = 'none';
+    salvarDados();
+    renderizarLancamentos();
+}
+
+async function salvarLancamento(e) {
     e.preventDefault();
     const id = document.getElementById('lancamento-id').value;
     const dados = {
@@ -179,6 +234,18 @@ function salvarLancamento(e) {
         descricao: document.getElementById('lancamento-descricao').value,
         valor: parseFloat(document.getElementById('lancamento-valor').value)
     };
+
+    // Upload da nota fiscal, se selecionada
+    const fileInput = document.getElementById('lancamento-nota-fiscal');
+    const arquivo = fileInput.files[0];
+    if (arquivo) {
+        const url = await uploadNotaFiscal(arquivo, id || Date.now());
+        if (url) dados.nota_fiscal_url = url;
+    } else if (id) {
+        // Preserva a nota existente se não foi selecionado novo arquivo
+        const lancExistente = appData.lancamentos.find(l => l.id == id);
+        if (lancExistente?.nota_fiscal_url) dados.nota_fiscal_url = lancExistente.nota_fiscal_url;
+    }
 
     if (id) {
         const index = appData.lancamentos.findIndex(l => l.id == id);
@@ -193,11 +260,11 @@ function salvarLancamento(e) {
     renderizarLancamentos();
     atualizarDashboardPremium();
     aplicarFiltrosControle();
-    
+
     if(document.getElementById('modal-evento').classList.contains('show')) {
         carregarLancamentosParaVinculo();
     }
-    
+
     salvarDados();
 }
 
@@ -222,12 +289,12 @@ function excluirLancamento(id) {
 function renderizarLancamentos() {
     const tbody = document.getElementById('lancamentos-body');
     if (appData.lancamentos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding: 2rem;">Nenhum lançamento encontrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="padding: 2rem;">Nenhum lançamento encontrado.</td></tr>';
         return;
     }
     
     const ordenados = [...appData.lancamentos].sort((a, b) => new Date(b.data) - new Date(a.data));
-    
+
     tbody.innerHTML = ordenados.map(l => `
         <tr>
             <td>${formatarData(l.data)}</td>
@@ -236,6 +303,7 @@ function renderizarLancamentos() {
             <td><strong>${l.historico}</strong></td>
             <td style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${l.descricao || ''}">${l.descricao || '-'}</td>
             <td><strong>${formatarMoeda(l.valor)}</strong></td>
+            <td>${l.nota_fiscal_url ? `<button class="btn-icon" onclick="abrirModalNotaFiscal('${l.nota_fiscal_url}')" title="Ver nota fiscal">📎</button>` : '<span style="color:#cbd5e1;" title="Sem nota fiscal">—</span>'}</td>
             <td>
                 <button class="btn-icon" onclick="abrirModalLancamento(${l.id})" title="Editar">✏️</button>
                 <button class="btn-icon" onclick="excluirLancamento(${l.id})" title="Excluir">🗑️</button>
@@ -251,65 +319,98 @@ function abrirModalEvento(id = null) {
     document.getElementById('form-evento').reset();
     document.getElementById('evento-id').value = '';
     document.getElementById('modal-evento-title').textContent = 'Criar Evento para Prestação';
-    document.getElementById('evento-lancamentos-body').innerHTML = '<tr><td colspan="5" class="text-center">Selecione uma categoria acima.</td></tr>';
-    
+    document.getElementById('evento-lancamentos-body').innerHTML = '<tr><td colspan="6" class="text-center">Selecione ao menos uma conta acima.</td></tr>';
+
+    renderizarContasParaEvento([]);
+
     if (id) {
         const ev = appData.eventos.find(e => e.id === id);
         document.getElementById('evento-id').value = ev.id;
         document.getElementById('evento-nome').value = ev.nome;
-        document.getElementById('evento-tipificacao').value = ev.tipificacao;
         document.getElementById('evento-informacoes').value = ev.informacoes;
         document.getElementById('modal-evento-title').textContent = 'Editar Evento';
+        // Suporte a eventos antigos com tipificacao única
+        const contasSalvas = ev.contasSelecionadas || (ev.tipificacao ? [ev.tipificacao] : []);
+        renderizarContasParaEvento(contasSalvas);
         carregarLancamentosParaVinculo(ev.lancamentosVinculados);
     }
     document.getElementById('modal-evento').classList.add('show');
 }
 
-function fecharModalEvento() { 
-    document.getElementById('modal-evento').classList.remove('show'); 
+function fecharModalEvento() {
+    document.getElementById('modal-evento').classList.remove('show');
+}
+
+function renderizarContasParaEvento(selecionadas = []) {
+    const container = document.getElementById('evento-contas-lista');
+    // Coleta todas as contas únicas dos lançamentos
+    const todasContas = [...new Set(appData.lancamentos.map(l => l.tipificacao).filter(Boolean))].sort();
+    if (todasContas.length === 0) {
+        container.innerHTML = '<span style="font-size:0.82rem;color:#94a3b8;">Nenhuma conta disponível nos lançamentos.</span>';
+        return;
+    }
+    container.innerHTML = todasContas.map(conta => {
+        const checked = selecionadas.includes(conta) ? 'checked' : '';
+        return `<label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.82rem;padding:0.3rem 0.6rem;background:white;border:1px solid #e2e8f0;border-radius:20px;cursor:pointer;user-select:none;">
+            <input type="checkbox" class="chk-conta-evento" value="${conta}" ${checked} onchange="carregarLancamentosParaVinculo()">
+            ${conta}
+        </label>`;
+    }).join('');
+}
+
+function getContasSelecionadasEvento() {
+    return Array.from(document.querySelectorAll('.chk-conta-evento:checked')).map(c => c.value);
 }
 
 function carregarLancamentosParaVinculo(vinculadosPreviamente = []) {
-    const tipificacao = document.getElementById('evento-tipificacao').value;
+    const contas = getContasSelecionadasEvento();
     const tbody = document.getElementById('evento-lancamentos-body');
-    
-    if (!tipificacao) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Selecione uma categoria.</td></tr>';
+
+    if (contas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">Selecione ao menos uma conta acima.</td></tr>';
         return;
     }
 
-    const lancamentosCategoria = appData.lancamentos.filter(l => l.tipificacao === tipificacao);
-    
-    if (lancamentosCategoria.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum lançamento encontrado nesta categoria.</td></tr>';
+    const lancamentosFiltrados = appData.lancamentos
+        .filter(l => contas.includes(l.tipificacao))
+        .sort((a, b) => new Date(b.data) - new Date(a.data));
+
+    if (lancamentosFiltrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum lançamento encontrado nas contas selecionadas.</td></tr>';
         return;
     }
 
-    tbody.innerHTML = lancamentosCategoria.map(l => {
+    tbody.innerHTML = lancamentosFiltrados.map(l => {
         const isChecked = vinculadosPreviamente.includes(l.id) ? 'checked' : '';
-        return `
-        <tr>
+        return `<tr>
             <td><input type="checkbox" class="chk-vinculo" value="${l.id}" ${isChecked}></td>
             <td>${formatarData(l.data)}</td>
             <td><span class="badge badge-${l.tipo.toLowerCase()}">${l.tipo}</span></td>
+            <td style="font-size:0.8rem;color:#64748b;">${l.tipificacao}</td>
             <td>${l.historico}</td>
             <td>${formatarMoeda(l.valor)}</td>
-        </tr>
-    `}).join('');
+        </tr>`;
+    }).join('');
+}
+
+function selecionarTodosVinculos(marcar) {
+    document.querySelectorAll('.chk-vinculo').forEach(c => c.checked = marcar);
 }
 
 function salvarEvento(e) {
     e.preventDefault();
     const id = document.getElementById('evento-id').value;
-    
+
     const checkboxes = document.querySelectorAll('.chk-vinculo:checked');
     const lancamentosVinculados = Array.from(checkboxes).map(chk => parseInt(chk.value));
+    const contasSelecionadas = getContasSelecionadasEvento();
 
     const dados = {
         nome: document.getElementById('evento-nome').value,
-        tipificacao: document.getElementById('evento-tipificacao').value,
+        contasSelecionadas,
+        tipificacao: contasSelecionadas.join(', '), // compatibilidade legada
         informacoes: document.getElementById('evento-informacoes').value,
-        lancamentosVinculados: lancamentosVinculados,
+        lancamentosVinculados,
         dataCriacao: new Date().toISOString()
     };
 
@@ -849,19 +950,30 @@ let dashPeriodo = 'anual';   // 'anual' | 'semestral' | 'trimestral' | 'mensal' 
 let dashSubValor = null;     // number: mes (1-12), trimestre (1-4), semestre (1-2)
 let dashDataInicio = null;   // string YYYY-MM-DD (intervalo)
 let dashDataFim    = null;   // string YYYY-MM-DD (intervalo)
+let dashAno = new Date().getFullYear(); // ano selecionado no dashboard (independente do orçamento)
 
 function atualizarLabelResumoDashboard() {
     const el = document.getElementById('dash-resumo-label');
     if (!el) return;
     const nomeMes = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     const labels = {
-        anual: `Anual — ${orcExercicioAtivo}`,
-        semestral: `S${dashSubValor||1} — ${orcExercicioAtivo}`,
-        trimestral: `T${dashSubValor||1} — ${orcExercicioAtivo}`,
-        mensal: `${nomeMes[dashSubValor||1]} — ${orcExercicioAtivo}`,
+        anual: `Anual — ${dashAno}`,
+        semestral: `S${dashSubValor||1} — ${dashAno}`,
+        trimestral: `T${dashSubValor||1} — ${dashAno}`,
+        mensal: `${nomeMes[dashSubValor||1]} — ${dashAno}`,
         intervalo: dashDataInicio && dashDataFim ? `${dashDataInicio} a ${dashDataFim}` : `Intervalo`
     };
     el.textContent = labels[dashPeriodo] || '';
+}
+
+async function setDashAno(ano) {
+    dashAno = +ano;
+    // Carrega orcValores do ano selecionado (trocarExercicio já faz isso)
+    await trocarExercicio(dashAno);
+    renderizarFiltroDashboard();
+    renderizarOrcadoRealizado();
+    atualizarDashboardComFiltro(dashLancamentosFiltrados());
+    atualizarLabelResumoDashboard();
 }
 
 function setDashPeriodo(periodo) {
@@ -882,6 +994,18 @@ function setDashPeriodo(periodo) {
 function renderizarFiltroDashboard() {
     const sub = document.getElementById('dash-filtro-sub');
     if (!sub) return;
+
+    // Seletor de ano
+    const anoContainer = document.getElementById('dash-filtro-ano');
+    if (anoContainer) {
+        const anos = orcExerciciosDisponiveis.length > 0
+            ? orcExerciciosDisponiveis
+            : [dashAno];
+        anoContainer.innerHTML = `<select onchange="setDashAno(this.value)" style="font-size:0.78rem;padding:0.25rem 0.4rem;border:1px solid #e2e8f0;border-radius:4px;font-weight:600;color:#1a5f4a;">
+            ${anos.map(a => `<option value="${a}" ${dashAno===a?'selected':''}>${a}</option>`).join('')}
+        </select>`;
+    }
+
     // Highlight active button
     ['anual','semestral','trimestral','mensal','intervalo'].forEach(p => {
         const btn = document.getElementById('dash-btn-'+p);
@@ -928,7 +1052,7 @@ function dashLancamentosFiltrados() {
     return (appData.lancamentos || []).filter(l => {
         const d = new Date(l.data);
         d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
-        if (d.getFullYear() !== orcExercicioAtivo) return false;
+        if (d.getFullYear() !== dashAno) return false;
         if (dashPeriodo === 'intervalo') {
             if (dashDataInicio && l.data < dashDataInicio) return false;
             if (dashDataFim    && l.data > dashDataFim)    return false;
@@ -963,7 +1087,7 @@ function renderizarOrcadoRealizado() {
     (appData.lancamentos || []).forEach(l => {
         const d = new Date(l.data);
         d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
-        if (d.getFullYear() !== orcExercicioAtivo) return;
+        if (d.getFullYear() !== dashAno) return;
         // Filtro de período
         if (dashPeriodo === 'intervalo') {
             if (dashDataInicio && l.data < dashDataInicio) return;
@@ -998,7 +1122,7 @@ function renderizarOrcadoRealizado() {
     // Exercício label
     if (el('dash-exercicio-label')) {
         const labels = { anual:'Anual', semestral:`S${dashSubValor||1}`, trimestral:`T${dashSubValor||1}`, mensal: ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][dashSubValor||1], intervalo:'Intervalo' };
-        el('dash-exercicio-label').textContent = `${orcExercicioAtivo} — ${labels[dashPeriodo]||''}`;
+        el('dash-exercicio-label').textContent = `${dashAno} — ${labels[dashPeriodo]||''}`;
     }
 
     // KPI receitas
@@ -1461,63 +1585,6 @@ function validarVinculoLancamento(lancamentoId, eventoIdAtual = null) {
     return true; // Lançamento pode ser vinculado
 }
 
-// Atualizar carregarLancamentosParaVinculo para validar
-function carregarLancamentosParaVincuLoComValidacao(vinculadosPreviamente = [], eventoIdAtual = null) {
-    const tipificacao = document.getElementById('evento-tipificacao').value;
-    const tbody = document.getElementById('evento-lancamentos-body');
-    
-    if (!tipificacao) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Selecione uma categoria.</td></tr>';
-        return;
-    }
-
-    const lancamentosCategoria = appData.lancamentos.filter(l => l.tipificacao === tipificacao);
-    
-    if (lancamentosCategoria.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum lançamento encontrado nesta categoria.</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = lancamentosCategoria.map(l => {
-        const isChecked = vinculadosPreviamente.includes(l.id) ? 'checked' : '';
-        const jaVinculado = !validarVinculoLancamento(l.id, eventoIdAtual) && !vinculadosPreviamente.includes(l.id);
-        const disabled = jaVinculado ? 'disabled' : '';
-        const title = jaVinculado ? 'Este lançamento já está vinculado a outro evento' : '';
-
-        return `
-        <tr ${jaVinculado ? 'style="opacity: 0.5;"' : ''}>
-            <td><input type="checkbox" class="chk-vinculo" value="${l.id}" ${isChecked} ${disabled} title="${title}"></td>
-            <td>${formatarData(l.data)}</td>
-            <td><span class="badge badge-${l.tipo.toLowerCase()}">${l.tipo}</span></td>
-            <td>${l.historico}</td>
-            <td>${formatarMoeda(l.valor)}</td>
-        </tr>
-    `}).join('');
-}
-
-// Atualizar a função carregarLancamentosParaVinculo original
-function carregarLancamentosParaVinculo(vinculadosPreviamente = [], eventoIdAtual = null) {
-    carregarLancamentosParaVincuLoComValidacao(vinculadosPreviamente, eventoIdAtual);
-}
-
-// Atualizar abrirModalEvento para passar o ID do evento
-function abrirModalEvento(id = null) {
-    document.getElementById('form-evento').reset();
-    document.getElementById('evento-id').value = '';
-    document.getElementById('modal-evento-title').textContent = 'Criar Evento para Prestação';
-    document.getElementById('evento-lancamentos-body').innerHTML = '<tr><td colspan="5" class="text-center">Selecione uma categoria acima.</td></tr>';
-    
-    if (id) {
-        const ev = appData.eventos.find(e => e.id === id);
-        document.getElementById('evento-id').value = ev.id;
-        document.getElementById('evento-nome').value = ev.nome;
-        document.getElementById('evento-tipificacao').value = ev.tipificacao;
-        document.getElementById('evento-informacoes').value = ev.informacoes;
-        document.getElementById('modal-evento-title').textContent = 'Editar Evento';
-        carregarLancamentosParaVinculo(ev.lancamentosVinculados, ev.id);
-    }
-    document.getElementById('modal-evento').classList.add('show');
-}
 
 // 
 // GERAÇÃO DE PRESTAÇÃO DE CONTAS
@@ -2731,6 +2798,10 @@ async function carregarOrcamento() {
     renderizarSidebarExercicios();
     renderizarParametros();
     renderizarPlanilha();
+
+    // Atualiza o dashboard com os dados orçados agora disponíveis
+    dashAno = orcExercicioAtivo;
+    setDashPeriodo('anual');
 }
 
 async function salvarParametro(mes, campo, rawVal) {
@@ -2744,6 +2815,47 @@ async function salvarParametro(mes, campo, rawVal) {
     const totEl = document.getElementById(`param-total-obreiros-${mes}`);
     if (totEl) totEl.textContent = (p.obreiros_normal||0)+(p.obreiros_remido||0)+(p.obreiros_licenciado||0);
     renderizarPlanilha();
+}
+
+async function adicionarContaPlanilha(grupoId) {
+    const nome = prompt('Nome da nova linha:');
+    if (!nome || !nome.trim()) return;
+
+    const { data, error } = await supabaseClient
+        .from('contas')
+        .insert({ plano_id: grupoId, nome: nome.trim() })
+        .select('id, plano_id, nome')
+        .single();
+
+    if (error) { alert('Erro ao adicionar linha: ' + error.message); return; }
+
+    const grupo = appData.planoContas.find(g => g.id === grupoId);
+    if (grupo) grupo.contas.push({ id: data.id, nome: data.nome, descricoes: [] });
+
+    registrarHistorico('INSERÇÃO', `Conta "${data.nome}" adicionada ao grupo ${grupoId}`, 'Orçamento');
+    renderizarPlanilha();
+    atualizarSelectsPlanosContas();
+}
+
+async function excluirContaPlanilha(contaId) {
+    const grupo = appData.planoContas.find(g => (g.contas||[]).some(c => c.id === contaId));
+    const conta = grupo?.contas?.find(c => c.id === contaId);
+    if (!conta) return;
+    if (!confirm(`Excluir a linha "${conta.nome}"? Os valores orçados dela serão removidos.`)) return;
+
+    // Remove valores orçados
+    await supabaseClient.from('orcamento_valores').delete().eq('conta_id', contaId);
+    // Remove a conta
+    const { error } = await supabaseClient.from('contas').delete().eq('id', contaId);
+    if (error) { alert('Erro ao excluir linha: ' + error.message); return; }
+
+    if (grupo) grupo.contas = grupo.contas.filter(c => c.id !== contaId);
+    // Limpa cache de valores
+    Object.keys(orcValores).forEach(k => { if (k.endsWith(`_${contaId}`)) delete orcValores[k]; });
+
+    registrarHistorico('EXCLUSÃO', `Conta "${conta.nome}" removida`, 'Orçamento');
+    renderizarPlanilha();
+    atualizarSelectsPlanosContas();
 }
 
 async function salvarValorConta(contaId, mes, rawVal) {
@@ -2914,10 +3026,17 @@ function renderizarPlanilha() {
         <td style="${S.n2}">${fv(anual)}</td>
     </tr>`;
 
+    const btnExcluir = (contaId) => `<button type="button" onclick="excluirContaPlanilha(${contaId})"
+        title="Excluir linha" style="border:none;background:none;cursor:pointer;color:#dc2626;font-size:0.8rem;padding:0 0.25rem;line-height:1;">✕</button>`;
+
     const rowConta = (conta, isFormula) => {
         const anual = calcAnualConta(conta.id);
+        const podeExcluir = !isFormula;
+        const nomeCell = podeExcluir
+            ? `<div style="display:flex;align-items:center;gap:0.25rem;overflow:hidden;">${btnExcluir(conta.id)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conta.nome}</span></div>`
+            : conta.nome;
         return `<tr>
-            <td style="${S.n3d}">${conta.nome}</td>
+            <td style="${S.n3d}">${nomeCell}</td>
             ${extraColsN3(anual, isFormula)}
             ${colunas.map(col => {
                 const soma = somarColuna(m => getValorConta(conta.id, m), col.meses);
@@ -2932,6 +3051,15 @@ function renderizarPlanilha() {
             <td style="${isFormula?S.fc:S.n3}">${fv(anual)}</td>
         </tr>`;
     };
+
+    const rowAdicionarConta = (grupoId) => `<tr>
+        <td colspan="${colunas.length + (isMensal ? 2 : 4)}" style="padding:0.2rem 0.4rem; border:1px solid #e2e8f0;">
+            <button type="button" onclick="adicionarContaPlanilha(${grupoId})"
+                style="font-size:0.75rem;padding:0.2rem 0.6rem;border:1px dashed #94a3b8;border-radius:4px;background:transparent;cursor:pointer;color:#64748b;">
+                + Adicionar linha
+            </button>
+        </td>
+    </tr>`;
 
     const rowResultado = () => {
         const cor = resAnual >= 0 ? '#16a34a' : '#dc2626';
@@ -2976,11 +3104,13 @@ function renderizarPlanilha() {
                 ${receitas.map((g,i)=>`
                     ${rowN2(`1.${i+1}`, g.descricao, m=>calcMesGrupo(g,m), calcAnualGrupo(g))}
                     ${(g.contas||[]).map(c=>rowConta(c, c.id===CONTA_MENSALIDADES_ID||c.id===CONTA_INADIMPLENCIA_ID)).join('')}
+                    ${rowAdicionarConta(g.id)}
                 `).join('')}
                 ${rowN1('2','TOTAL DAS DESPESAS', totDesMes, totDesAnual)}
                 ${despesas.map((g,i)=>`
                     ${rowN2(`2.${i+1}`, g.descricao, m=>calcMesGrupo(g,m), calcAnualGrupo(g))}
                     ${(g.contas||[]).map(c=>rowConta(c, false)).join('')}
+                    ${rowAdicionarConta(g.id)}
                 `).join('')}
                 ${rowResultado()}
             </tbody>

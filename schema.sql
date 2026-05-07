@@ -46,10 +46,14 @@ CREATE TABLE IF NOT EXISTS lancamentos (
     historico       TEXT NOT NULL,
     descricao       TEXT,
     valor           NUMERIC(15, 2) NOT NULL CHECK (valor > 0),
+    nota_fiscal_url TEXT,
     created_by      UUID REFERENCES profiles(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Adiciona a coluna em bancos existentes (sem erro se já existir)
+ALTER TABLE lancamentos ADD COLUMN IF NOT EXISTS nota_fiscal_url TEXT;
 
 -- Categorias (legacy — usadas em Eventos/Prestação de Contas)
 CREATE TABLE IF NOT EXISTS tipificacoes (
@@ -143,3 +147,58 @@ CREATE POLICY "user_read_lancamentos"  ON lancamentos   FOR SELECT USING (EXISTS
 CREATE POLICY "user_read_plano"        ON plano_contas  FOR SELECT USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'approved'));
 CREATE POLICY "user_read_contas"       ON contas        FOR SELECT USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'approved'));
 CREATE POLICY "user_read_eventos"      ON eventos       FOR SELECT USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'approved'));
+
+-- ============================================================
+-- STORAGE — Bucket notas-fiscais
+-- Execute no Supabase SQL Editor (dashboard.supabase.com)
+-- ============================================================
+
+-- 1. Criar o bucket (público = URLs acessíveis sem autenticação)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('notas-fiscais', 'notas-fiscais', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 2. Upload: apenas admins autenticados e aprovados
+DROP POLICY IF EXISTS "nf_upload_admin" ON storage.objects;
+CREATE POLICY "nf_upload_admin"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+    bucket_id = 'notas-fiscais'
+    AND EXISTS (
+        SELECT 1 FROM profiles p
+        WHERE p.id = auth.uid() AND p.role = 'admin' AND p.status = 'approved'
+    )
+);
+
+-- 3. Leitura pública (necessário para exibir a nota no modal)
+DROP POLICY IF EXISTS "nf_read_public" ON storage.objects;
+CREATE POLICY "nf_read_public"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'notas-fiscais');
+
+-- 4. Exclusão: apenas admins
+DROP POLICY IF EXISTS "nf_delete_admin" ON storage.objects;
+CREATE POLICY "nf_delete_admin"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+    bucket_id = 'notas-fiscais'
+    AND EXISTS (
+        SELECT 1 FROM profiles p
+        WHERE p.id = auth.uid() AND p.role = 'admin' AND p.status = 'approved'
+    )
+);
+
+-- 5. Substituição (upsert): apenas admins
+DROP POLICY IF EXISTS "nf_update_admin" ON storage.objects;
+CREATE POLICY "nf_update_admin"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (
+    bucket_id = 'notas-fiscais'
+    AND EXISTS (
+        SELECT 1 FROM profiles p
+        WHERE p.id = auth.uid() AND p.role = 'admin' AND p.status = 'approved'
+    )
+);
