@@ -2216,6 +2216,47 @@ const CONTA_INADIMPLENCIA_ID = 3;
 
 let orcParam = {};
 let orcValores = {};
+let orcPeriodo = 'mensal'; // 'mensal' | 'trimestral' | 'semestral'
+
+const ORC_TRIMESTRES = [
+    { label: 'T1 (Jan-Mar)', meses: [1,2,3] },
+    { label: 'T2 (Abr-Jun)', meses: [4,5,6] },
+    { label: 'T3 (Jul-Set)', meses: [7,8,9] },
+    { label: 'T4 (Out-Dez)', meses: [10,11,12] },
+];
+const ORC_SEMESTRES = [
+    { label: '1º Semestre', meses: [1,2,3,4,5,6] },
+    { label: '2º Semestre', meses: [7,8,9,10,11,12] },
+];
+
+function trocarPeriodoOrc(periodo) {
+    orcPeriodo = periodo;
+    atualizarBotoesPeriodo();
+    renderizarParametros();
+    renderizarPlanilha();
+}
+
+function atualizarBotoesPeriodo() {
+    ['mensal','trimestral','semestral'].forEach(p => {
+        const btn = document.getElementById(`orc-btn-${p}`);
+        if (!btn) return;
+        const ativo = p === orcPeriodo;
+        btn.style.background = ativo ? 'var(--color-primary)' : 'white';
+        btn.style.color = ativo ? 'white' : '#475569';
+        btn.style.borderColor = ativo ? 'var(--color-primary)' : '#cbd5e1';
+        btn.style.fontWeight = ativo ? '700' : '400';
+    });
+}
+
+function orcColunas() {
+    if (orcPeriodo === 'trimestral') return ORC_TRIMESTRES;
+    if (orcPeriodo === 'semestral') return ORC_SEMESTRES;
+    return ORC_MESES_LABELS.map((label, i) => ({ label, meses: [i + 1] }));
+}
+
+function somarColuna(getFn, meses) {
+    return meses.reduce((a, m) => a + getFn(m), 0);
+}
 
 async function carregarExercicios() {
     const { data, error } = await supabaseClient
@@ -2484,48 +2525,68 @@ function calcAnualGrupo(grupo) {
 function renderizarParametros() {
     const container = document.getElementById('orcamento-parametros-container');
     if (!container) return;
-    const M = [1,2,3,4,5,6,7,8,9,10,11,12];
+    atualizarBotoesPeriodo();
+    const colunas = orcColunas();
+    const isMensal = orcPeriodo === 'mensal';
     const rows = [
-        { key:'obreiros_normal',      label:'Nº Obreiros — Normal',            step:'1',    pct:false },
-        { key:'obreiros_remido',      label:'Nº Obreiros — Remido',            step:'1',    pct:false },
-        { key:'obreiros_licenciado',  label:'Nº Obreiros — Licenciado',        step:'1',    pct:false },
-        { key:'mensalidade_normal',   label:'Mensalidade Normal (R$)',          step:'0.01', pct:false },
-        { key:'mensalidade_remido',   label:'Mensalidade Remido (R$)',          step:'0.01', pct:false },
-        { key:'mensalidade_licenciado',label:'Mensalidade Licenciado (R$)',     step:'0.01', pct:false },
-        { key:'taxa_inadimplencia',   label:'Taxa de Inadimplência (%)',        step:'0.1',  pct:true  },
-        { key:'taxa_gob',             label:'Taxa GOB (R$)',                    step:'0.01', pct:false },
-        { key:'taxa_godf',            label:'Taxa GODF (R$)',                   step:'0.01', pct:false },
+        { key:'obreiros_normal',       label:'Nº Obreiros — Normal',          step:'1',    pct:false },
+        { key:'obreiros_remido',       label:'Nº Obreiros — Remido',          step:'1',    pct:false },
+        { key:'obreiros_licenciado',   label:'Nº Obreiros — Licenciado',      step:'1',    pct:false },
+        { key:'mensalidade_normal',    label:'Mensalidade Normal (R$)',        step:'0.01', pct:false },
+        { key:'mensalidade_remido',    label:'Mensalidade Remido (R$)',        step:'0.01', pct:false },
+        { key:'mensalidade_licenciado',label:'Mensalidade Licenciado (R$)',    step:'0.01', pct:false },
+        { key:'taxa_inadimplencia',    label:'Taxa de Inadimplência (%)',      step:'0.1',  pct:true  },
+        { key:'taxa_gob',              label:'Taxa GOB (R$)',                  step:'0.01', pct:false },
+        { key:'taxa_godf',             label:'Taxa GODF (R$)',                 step:'0.01', pct:false },
     ];
     const th = 'padding:0.45rem 0.5rem; border:1px solid #cbd5e1; text-align:center; font-size:0.8rem;';
     const tdLabel = 'padding:0.35rem 0.75rem; border:1px solid #e2e8f0; background:#f8fafc; white-space:nowrap; font-size:0.8rem;';
     const tdInput = 'padding:0.1rem; border:1px solid #e2e8f0;';
     const inputStyle = 'width:100%;border:none;text-align:right;padding:0.25rem;font-size:0.8rem;background:transparent;';
+    const tdRead = 'text-align:right;padding:0.35rem 0.5rem;border:1px solid #e2e8f0;font-size:0.8rem;';
 
     container.innerHTML = `
-        <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Parâmetros Mensais — ${orcExercicioAtivo}</p>
+        <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Parâmetros — ${orcExercicioAtivo}</p>
         <div style="overflow-x:auto;">
-        <table style="border-collapse:collapse; min-width:1100px; width:100%;">
+        <table style="border-collapse:collapse; min-width:800px; width:100%;">
             <thead><tr style="background:#f1f5f9;">
                 <th style="text-align:left;${th} min-width:220px;">Variável</th>
-                ${ORC_MESES_LABELS.map(l=>`<th style="${th} min-width:78px;">${l}</th>`).join('')}
+                ${colunas.map(c=>`<th style="${th} min-width:90px;">${c.label}</th>`).join('')}
             </tr></thead>
             <tbody>
                 ${rows.map(r=>`<tr>
                     <td style="${tdLabel}">${r.label}</td>
-                    ${M.map(mes=>{
-                        const raw = orcParam[mes]?.[r.key] ?? 0;
-                        const disp = r.pct ? (raw*100).toFixed(1) : raw;
-                        return `<td style="${tdInput}"><input type="number" step="${r.step}" value="${disp}"
-                            style="${inputStyle}" onfocus="this.select()"
-                            onblur="salvarParametro(${mes},'${r.key}',this.value)"></td>`;
+                    ${colunas.map(col=>{
+                        if (isMensal) {
+                            const mes = col.meses[0];
+                            const raw = orcParam[mes]?.[r.key] ?? 0;
+                            const disp = r.pct ? (raw*100).toFixed(1) : raw;
+                            return `<td style="${tdInput}"><input type="number" step="${r.step}" value="${disp}"
+                                style="${inputStyle}" onfocus="this.select()"
+                                onblur="salvarParametro(${mes},'${r.key}',this.value)"></td>`;
+                        }
+                        const soma = col.meses.reduce((a,m) => {
+                            const raw = orcParam[m]?.[r.key] ?? 0;
+                            return a + (r.pct ? raw*100 : raw);
+                        }, 0);
+                        const disp = r.pct ? (soma / col.meses.length).toFixed(1) + '%' : soma.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+                        return `<td style="${tdRead}">${disp}</td>`;
                     }).join('')}
                 </tr>`).join('')}
                 <tr style="background:#dbeafe; font-weight:600;">
                     <td style="${tdLabel} background:#dbeafe;">Total de Obreiros Contribuintes</td>
-                    ${M.map(mes=>{
-                        const p=orcParam[mes]||{};
-                        const tot=(p.obreiros_normal||0)+(p.obreiros_remido||0)+(p.obreiros_licenciado||0);
-                        return `<td id="param-total-obreiros-${mes}" style="text-align:right;padding:0.35rem 0.5rem;border:1px solid #bfdbfe;">${tot}</td>`;
+                    ${colunas.map(col=>{
+                        if (isMensal) {
+                            const mes = col.meses[0];
+                            const p=orcParam[mes]||{};
+                            const tot=(p.obreiros_normal||0)+(p.obreiros_remido||0)+(p.obreiros_licenciado||0);
+                            return `<td id="param-total-obreiros-${mes}" style="text-align:right;padding:0.35rem 0.5rem;border:1px solid #bfdbfe;">${tot}</td>`;
+                        }
+                        const soma = col.meses.reduce((a,m) => {
+                            const p=orcParam[m]||{};
+                            return a+(p.obreiros_normal||0)+(p.obreiros_remido||0)+(p.obreiros_licenciado||0);
+                        }, 0);
+                        return `<td style="text-align:right;padding:0.35rem 0.5rem;border:1px solid #bfdbfe;">${soma}</td>`;
                     }).join('')}
                 </tr>
             </tbody>
@@ -2563,11 +2624,17 @@ function renderizarPlanilha() {
         cellinp: 'padding:0.1rem; border:1px solid #e2e8f0;',
     };
 
+    const colunas = orcColunas();
+    const isMensal = orcPeriodo === 'mensal';
+    const nCols = colunas.length;
+
+    const getColVal = (getFn, col) => somarColuna(getFn, col.meses);
+
     const rowN1 = (cod, label, getMes, anual) => `<tr>
         <td style="${S.n1d}">${cod}  ${label}</td>
         <td style="${S.n1}">${fv(anual/12)}</td>
         <td style="${S.n1}">${fp(anual,totRecAnual)}</td>
-        ${M.map(m=>`<td style="${S.n1}">${fv(getMes(m))}</td>`).join('')}
+        ${colunas.map(col=>`<td style="${S.n1}">${fv(getColVal(getMes,col))}</td>`).join('')}
         <td style="${S.n1}">${fv(anual)}</td>
     </tr>`;
 
@@ -2575,7 +2642,7 @@ function renderizarPlanilha() {
         <td style="${S.n2d}">${cod}  ${label}</td>
         <td style="${S.n2}">${fv(anual/12)}</td>
         <td style="${S.n2}">${fp(anual,totRecAnual)}</td>
-        ${M.map(m=>`<td style="${S.n2}">${fv(getMes(m))}</td>`).join('')}
+        ${colunas.map(col=>`<td style="${S.n2}">${fv(getColVal(getMes,col))}</td>`).join('')}
         <td style="${S.n2}">${fv(anual)}</td>
     </tr>`;
 
@@ -2585,9 +2652,12 @@ function renderizarPlanilha() {
             <td style="${S.n3d}">${conta.nome}</td>
             <td style="${isFormula?S.fc:S.n3}">${fv(anual/12)}</td>
             <td style="${isFormula?S.fc:S.n3}">${fp(anual,totRecAnual)}</td>
-            ${M.map(m => {
+            ${colunas.map(col => {
+                const soma = somarColuna(m => getValorConta(conta.id, m), col.meses);
+                if (isFormula) return `<td style="${S.fc}">${fv(soma)}</td>`;
+                if (!isMensal) return `<td style="${S.n3}">${fv(soma)}</td>`;
+                const m = col.meses[0];
                 const v = getValorConta(conta.id, m);
-                if (isFormula) return `<td style="${S.fc}">${fv(v)}</td>`;
                 return `<td style="${S.cellinp}"><input type="number" step="0.01"
                     value="${v||''}" style="${S.inp}" onfocus="this.select()"
                     onblur="salvarValorConta(${conta.id},${m},this.value)"></td>`;
@@ -2603,7 +2673,7 @@ function renderizarPlanilha() {
             <td style="background:#0f172a;color:${cor};font-weight:700;padding:0.5rem 0.75rem;border:1px solid #1e293b;white-space:nowrap;font-size:0.78rem;">RESULTADO FINAL</td>
             <td style="${st}">${fv(resAnual/12)}</td>
             <td style="${st}">${fp(resAnual,totRecAnual)}</td>
-            ${M.map(m=>{const v=resMes(m);const c=v>=0?'#16a34a':'#dc2626';
+            ${colunas.map(col=>{const v=somarColuna(resMes,col.meses);const c=v>=0?'#16a34a':'#dc2626';
                 return `<td style="background:#0f172a;color:${c};font-weight:700;padding:0.5rem 0.4rem;text-align:right;border:1px solid #1e293b;font-size:0.78rem;">${fv(v)}</td>`;
             }).join('')}
             <td style="background:#0f172a;color:${cor};font-weight:700;padding:0.5rem 0.4rem;text-align:right;border:1px solid #1e293b;font-size:0.78rem;">${fv(resAnual)}</td>
@@ -2613,12 +2683,12 @@ function renderizarPlanilha() {
     container.innerHTML = `
         <p style="font-weight:600; margin-bottom:0.75rem; color:var(--color-primary);">Projeção de Receitas e Despesas — ${orcExercicioAtivo}</p>
         <div style="overflow-x:auto;">
-        <table style="border-collapse:collapse; min-width:1500px; width:100%;">
+        <table style="border-collapse:collapse; min-width:800px; width:100%;">
             <thead><tr style="background:#334155; color:white;">
                 <th style="text-align:left;${S.th} min-width:260px; position:sticky; left:0; z-index:2; background:#334155;">Descrição</th>
                 <th style="${S.th} min-width:90px;">Média Mensal</th>
                 <th style="${S.th} min-width:60px;">%</th>
-                ${ORC_MESES_LABELS.map(l=>`<th style="${S.th} min-width:78px;">${l}</th>`).join('')}
+                ${colunas.map(c=>`<th style="${S.th} min-width:90px;">${c.label}</th>`).join('')}
                 <th style="${S.th} min-width:90px;">Total</th>
             </tr></thead>
             <tbody>

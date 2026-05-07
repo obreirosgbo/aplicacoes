@@ -463,10 +463,17 @@
                         <button class="btn-secondary" onclick="carregarOrcamento()">↻ Recarregar</button>
                     </div>
 
-                    <!-- Barra de exercícios -->
+                    <!-- Barra de exercícios e filtro -->
                     <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1.5rem; padding:0.75rem 1rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
                         <span style="font-weight:700; font-size:0.8rem; color:#475569; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap;">Exercício:</span>
                         <div id="orcamento-exercicios-lista" style="display:flex; gap:0.4rem; flex-wrap:wrap;"></div>
+                        <div style="width:1px; height:1.2rem; background:#e2e8f0; flex-shrink:0;"></div>
+                        <span style="font-weight:700; font-size:0.8rem; color:#475569; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap;">Visualização:</span>
+                        <div id="orcamento-filtro-periodo" style="display:flex; gap:0.25rem;">
+                            <button onclick="trocarPeriodoOrc('mensal')" id="orc-btn-mensal" style="font-size:0.8rem; padding:0.3rem 0.7rem; border-radius:4px; border:1px solid #cbd5e1; cursor:pointer; background:white; color:#475569;">Mensal</button>
+                            <button onclick="trocarPeriodoOrc('trimestral')" id="orc-btn-trimestral" style="font-size:0.8rem; padding:0.3rem 0.7rem; border-radius:4px; border:1px solid #cbd5e1; cursor:pointer; background:white; color:#475569;">Trimestral</button>
+                            <button onclick="trocarPeriodoOrc('semestral')" id="orc-btn-semestral" style="font-size:0.8rem; padding:0.3rem 0.7rem; border-radius:4px; border:1px solid #cbd5e1; cursor:pointer; background:white; color:#475569;">Semestral</button>
+                        </div>
                         <div style="margin-left:auto; display:flex; gap:0.5rem;">
                             <button class="btn-secondary" style="font-size:0.8rem; padding:0.35rem 0.75rem;" onclick="criarExercicio()">+ Novo</button>
                             <button class="btn-secondary" style="font-size:0.8rem; padding:0.35rem 0.75rem;" onclick="abrirModalCopiarExercicio()">⧉ Copiar</button>
@@ -1011,8 +1018,8 @@
         </div>
     </div>
     <!-- SCRIPTS -->
-    <script src="supabase.js"></script>
-    <script src="usuario.js"></script>
-    <script src="app.js"></script>
+    <script src="supabase.js?v=2"></script>
+    <script src="usuario.js?v=2"></script>
+    <script src="app.js?v=2"></script>
 </body>
 </html>
