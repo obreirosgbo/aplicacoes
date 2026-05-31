@@ -257,7 +257,6 @@ async function salvarLancamento(e) {
     const payload = {
         tipo:       document.getElementById('lancamento-tipo').value,
         tipificacao,
-        conta_nome: tipificacao,
         data:       document.getElementById('lancamento-data').value,
         historico:  document.getElementById('lancamento-historico').value,
         descricao:  document.getElementById('lancamento-descricao').value,
